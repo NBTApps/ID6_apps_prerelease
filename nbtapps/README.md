@@ -129,6 +129,46 @@ BEAMer ship their 1280×480 layout only, with no hook. This is the contract the 
   are stale. It also refuses a missing size, a folder or file there that is not listed above, a generated
   `<Folder>.xml` that is not XML or has an `entryButtonFocusID`, and an image zip that does not read back.
 
+`make_layouts.py` makes them, by the rule upstream's own desktop installer follows. For a size W×H, with
+fx = W/1280 and fy = H/480:
+
+- in `<Folder>.xml`, each `<property id="20">` (x) and `id="9"` (width) value is multiplied by fx, and each
+  `id="21"` (y) and `id="10"` (height) value by fy. The file is changed as text, so every other byte is the base
+  file's;
+- each PNG in the image zip is resized to (width × fx, height × fy) in RGBA with a Lanczos filter, and saved as a
+  PNG. An image whose size does not change is copied as it is. The zip has the base's entries in the base's order,
+  deflated, with a fixed time;
+- results are rounded to the nearest whole number, halves to the even one, and a width or height is at least 1.
+
+The 800×480 and 960×480 layouts are squeezed sideways and not taller, as the installer's are. The script reads
+the base through `make_nbtpkg.py`'s checks, and refuses a base it does not know how to scale: a property id other
+than 2, 3, 9, 10, 20, 21 and 23, a value to scale that is not a plain non-negative whole number, or an image zip
+entry that is not a PNG named `<digits>.png`. It writes each app's folder whole, through a temporary folder
+beside it.
+
+It needs Pillow; the layouts here were made with Pillow 13.0.0 on Python 3.14. The release workflow never runs
+it. After taking in a change to an upstream layout, regenerate and commit the result:
+
+```sh
+python3 -m pip install Pillow
+python3 nbtapps/make_layouts.py                      # every app with "layouts": true
+python3 nbtapps/make_layouts.py boostdeck mhd-suite  # or the ones named
+python3 nbtapps/make_layouts.py --check
+```
+
+`--check` makes the layouts again in memory and compares them with what is committed, and writes nothing. It
+compares `SOURCE` and the XML byte for byte, and the images by their size and decoded pixels, as PNG and zip bytes
+can differ between zlib builds. It exits with 1 and names each difference: a file missing or extra, an XML file
+that differs, an image entry missing, out of order, of another size or with other pixels. On the same machine, a
+rerun gives the same bytes.
+
+`tests/test_make_layouts.py` checks what is committed with the standard library only: for each app and size, the
+XML differs from the base only in those values, each by the rule; the image zip has the base's entries in its
+order, each of the size the rule gives; `SOURCE` matches the zip; nothing else is there; and `make_nbtpkg.py`'s
+`read_layouts` accepts them. The rounding is tested without Pillow too. The tests that run the generator on
+synthetic input (XML and images by the rule, copies of unchanged images, `--check`, the refusals, writing a folder
+whole) need Pillow, and are skipped without it, as they are in the workflow.
+
 ### What the archive holds
 
 Every size, the base size included, goes to `payload/<Folder>/layouts/<WxH>/`, and so to
