@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: MIT
+# preRemove hook of the @FOLDER@ package (NBTApps), made by nbtapps/make_nbtpkg.py from remove-layout.sh.in.
+#
+# Removes the two files select-layout.sh made, @FOLDER@.xml and @FOLDER@_ALL_Images.zip in the plugin folder,
+# which are in no package's record, and whatever select-layout.sh may have left behind if it was stopped. The
+# agent then removes the package's own files, and the plugin folder once it is empty. Nothing else in the folder
+# is touched: an owner may keep a gateway-ip.txt there.
+#
+# Exit status: 0, also when the files or NBT_VAR_PLUGINS_DIR are not there; 1 when a file could not be removed
+# (the agent logs that and removes the package anyway).
+
+folder=@FOLDER@
+
+if [ -z "$NBT_VAR_PLUGINS_DIR" ]; then
+    echo "$folder: NBT_VAR_PLUGINS_DIR is not set, so the plugin folder cannot be found; nothing removed"
+    exit 0
+fi
+dir=$NBT_VAR_PLUGINS_DIR/$folder
+xml=$dir/$folder.xml
+zip=$dir/${folder}_ALL_Images.zip
+
+rm -f "$xml" "$zip" "$dir/.select-layout.screen" "$dir/.select-layout.xml" "$dir/.select-layout.zip" \
+    "$dir/.select-layout.xml.old"
+left=
+for f in "$xml" "$zip" "$dir/.select-layout.screen" "$dir/.select-layout.xml" "$dir/.select-layout.zip" \
+    "$dir/.select-layout.xml.old"; do
+    if [ -f "$f" ]; then
+        left="$left $f"
+    fi
+done
+if [ -n "$left" ]; then
+    echo "$folder: could not remove$left" >&2
+    exit 1
+fi
+echo "$folder: the active layout is removed"
+exit 0

@@ -1,0 +1,186 @@
+# SPDX-License-Identifier: MIT
+# postInstall hook of the @FOLDER@ package (NBTApps), made by nbtapps/make_nbtpkg.py from select-layout.sh.in.
+#
+# The package places a layout for each screen size at $NBT_VAR_PLUGINS_DIR/@FOLDER@/layouts/<WxH>/ and nothing
+# at the two files the HMI reads, @FOLDER@.xml and @FOLDER@_ALL_Images.zip in the plugin folder. This script asks
+# LayerManagerControl for the size of screen 0, picks that size's layout (@BASE_SIZE@ when the size is not known
+# or has no layout here) and copies its two files there. It runs after every install and upgrade; the HMI reads
+# the files when it next starts. nbtapps/README.md, "Layouts and hooks", has the contract.
+#
+# It is written for the head unit's /bin/ksh and the tools a head unit has: builtins, sed, cp, mv, rm and sleep.
+# Exit status: 0 when a layout is in place, 1 when none could be placed (the agent then undoes the install).
+
+umask 022
+folder=@FOLDER@
+base=@BASE_SIZE@
+
+if [ -z "$NBT_VAR_PLUGINS_DIR" ]; then
+    echo "$folder: NBT_VAR_PLUGINS_DIR is not set, so the plugin folder cannot be found; no layout placed" >&2
+    exit 1
+fi
+dir=$NBT_VAR_PLUGINS_DIR/$folder
+xml=$dir/$folder.xml
+zip=$dir/${folder}_ALL_Images.zip
+# Every file of this script's own in the plugin folder. preRemove (remove-layout.sh) removes the same names.
+screen=$dir/.select-layout.screen
+new_xml=$dir/.select-layout.xml
+new_zip=$dir/.select-layout.zip
+old_xml=$dir/.select-layout.xml.old
+
+tidy() {
+    rm -f "$screen" "$new_xml" "$new_zip" "$old_xml"
+}
+
+tidy
+if [ ! -f "$dir/layouts/$base/$folder.xml" ] || [ ! -f "$dir/layouts/$base/${folder}_ALL_Images.zip" ]; then
+    echo "$folder: the $base layout is not in $dir/layouts/$base; no layout placed" >&2
+    exit 1
+fi
+
+# ---- the screen's size ----------------------------------------------------------------------------------------
+# LayerManagerControl is looked for along PATH by hand, so that "not there" is told apart from "said nothing".
+lmc=
+save_ifs=$IFS
+IFS=:
+set -f
+for d in $PATH; do
+    if [ -n "$d" ] && [ -f "$d/LayerManagerControl" ] && [ -x "$d/LayerManagerControl" ]; then
+        lmc=$d/LayerManagerControl
+        break
+    fi
+done
+set +f
+IFS=$save_ifs
+
+seen=
+size=
+if [ -z "$lmc" ]; then
+    seen="LayerManagerControl is not on this head unit's PATH"
+else
+    # In the background with its own limit of about 5 seconds: a query that hangs would otherwise run into the
+    # hook's 30 second timeout and fail the install. Its output goes to a scratch file in the plugin folder.
+    LD_LIBRARY_PATH=/opt/sys/lib:/usr/lib:/lib "$lmc" get screen 0 <"/dev/null" >"$screen" 2>&1 &
+    pid=$!
+    for t in 1 2 3 4 5; do
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 1
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+        kill -9 "$pid" 2>/dev/null
+        gone=
+        for t in 1 2; do
+            if kill -0 "$pid" 2>/dev/null; then
+                sleep 1
+            else
+                gone=yes
+                break
+            fi
+        done
+        if [ -n "$gone" ]; then
+            wait "$pid" 2>/dev/null
+            seen="LayerManagerControl did not answer within 5 seconds and was stopped"
+        else
+            seen="LayerManagerControl did not answer within 5 seconds and could not be stopped"
+        fi
+    else
+        wait "$pid"
+        status=$?
+        # The first line that matches, case aside, what upstream's tools match:
+        #   resolution:\s*x\s*=\s*([0-9]{2,4}),\s*y\s*=\s*([0-9]{2,4})
+        # sed prints "<x> <y>" with every digit of each; the lengths are checked below.
+        pairs=$(sed -n 's/^.*[Rr][Ee][Ss][Oo][Ll][Uu][Tt][Ii][Oo][Nn]:[[:space:]]*[Xx][[:space:]]*=[[:space:]]*\([0-9][0-9]*\),[[:space:]]*[Yy][[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*$/\1 \2/p' "$screen" 2>/dev/null)
+        set -f
+        set -- $pairs
+        set +f
+        while [ $# -ge 2 ]; do
+            x=$1
+            y=$2
+            shift 2
+            case $x in
+                [0-9][0-9] | [0-9][0-9][0-9] | [0-9][0-9][0-9][0-9]) ;;
+                *) continue ;;
+            esac
+            case $y in
+                [0-9][0-9]*) ;;
+                *) continue ;;
+            esac
+            while :; do
+                case $y in
+                    [0-9][0-9][0-9][0-9][0-9]*) y=${y%?} ;;
+                    *) break ;;
+                esac
+            done
+            size=${x}x$y
+            break
+        done
+        if [ -z "$size" ]; then
+            if [ "$status" -eq 0 ]; then
+                seen="LayerManagerControl gave no screen resolution"
+            else
+                seen="LayerManagerControl gave no screen resolution (it exited with $status)"
+            fi
+        fi
+    fi
+fi
+rm -f "$screen"
+
+# ---- the layout -----------------------------------------------------------------------------------------------
+chosen=$base
+if [ -n "$size" ]; then
+    case $size in
+        @SIZES@)
+            if [ ! -f "$dir/layouts/$size/$folder.xml" ]; then
+                seen="the screen is $size, but layouts/$size/$folder.xml is not there"
+            elif [ ! -f "$dir/layouts/$size/${folder}_ALL_Images.zip" ]; then
+                seen="the screen is $size, but layouts/$size/${folder}_ALL_Images.zip is not there"
+            else
+                chosen=$size
+            fi
+            ;;
+        *)
+            seen="the screen is $size, a size this app has no layout for"
+            ;;
+    esac
+fi
+if [ "$chosen" != "$size" ]; then
+    echo "$folder: $seen; using the $base layout"
+fi
+
+# ---- placing it ----------------------------------------------------------------------------------------------
+# Each file is copied beside the one the HMI reads and renamed over it, so a file the HMI has open is never
+# written into. Both copies are made before either rename.
+failed() {
+    echo "$folder: $1; no layout placed" >&2
+    if [ "$NBT_ACTION" = install ]; then
+        # The agent undoes the install, and takes the plugin folder away only if it is empty.
+        rm -f "$xml" "$zip"
+    fi
+    tidy
+    exit 1
+}
+
+if [ -d "$xml" ] || [ -d "$zip" ]; then
+    failed "$xml or $zip is a folder"
+fi
+if [ -f "$xml" ] && [ "$NBT_ACTION" != install ]; then
+    # Kept until both renames are done, to put back if the second one fails.
+    cp "$xml" "$old_xml" || failed "cannot keep a copy of $xml"
+fi
+cp "$dir/layouts/$chosen/$folder.xml" "$new_xml" || failed "cannot copy the $chosen $folder.xml"
+cp "$dir/layouts/$chosen/${folder}_ALL_Images.zip" "$new_zip" || failed "cannot copy the $chosen ${folder}_ALL_Images.zip"
+mv -f "$new_xml" "$xml" || failed "cannot rename the new $folder.xml into place"
+if mv -f "$new_zip" "$zip"; then
+    :
+else
+    if [ "$NBT_ACTION" != install ]; then
+        if [ -f "$old_xml" ]; then
+            mv -f "$old_xml" "$xml"
+        else
+            rm -f "$xml"
+        fi
+    fi
+    failed "cannot rename the new ${folder}_ALL_Images.zip into place"
+fi
+tidy
+echo "$folder: the $chosen layout is in place; the HMI uses it from its next start"
+exit 0

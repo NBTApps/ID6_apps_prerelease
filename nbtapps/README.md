@@ -189,10 +189,42 @@ removes them.
   current folder, to find the plugin. It gives
   it `NBT_ACTION`, `NBT_PKG_ID`, `NBT_PKG_VERSION`, `NBT_OLD_VERSION` on an upgrade, and `NBT_VAR_PLUGINS_DIR`,
   the folder the plugins are in. See the NBTApps `headunit/README.md`.
-- `select-layout.sh` picks the head unit's size, falls back to the base size, and copies that size's two files to
-  `$NBT_VAR_PLUGINS_DIR/<Folder>/<Folder>.xml` and `..._ALL_Images.zip`. It must write over what is there, as it
-  also runs on an upgrade. A non-zero exit fails the install.
-- `remove-layout.sh` removes those two files. If it fails, the agent logs it and removes the package anyway.
+- The scripts are written for the head unit's `/bin/ksh` (pdksh) and the tools a probe found there. They use
+  builtins, `sed`, `cp`, `mv`, `rm` and `sleep`, and no `[[ ]]`, `$'...'`, arrays, `local` or `$((...))`.
+  `tests/test_hooks.py` runs them under this machine's `sh` (`HOOK_SHELL` names another), with a fake
+  `LayerManagerControl`, and fails on a command outside that list.
+- `select-layout.sh` (`postInstall`, on an install and on every upgrade):
+  1. Finds the plugin at `$NBT_VAR_PLUGINS_DIR/<Folder>`. With the variable unset or empty, or the base size's two
+     files missing under `layouts/<base>/`, it says why and exits 1.
+  2. Looks for `LayerManagerControl` along `PATH` (`/opt/sys/bin` on a car) and runs
+     `LayerManagerControl get screen 0` in the background with `LD_LIBRARY_PATH=/opt/sys/lib:/usr/lib:/lib`, its
+     output going to `.select-layout.screen` in the plugin folder. It checks once a second whether the command
+     has ended, and after 5 seconds kills it (`kill -9`), so a hung query cannot run into the hook's 30 second
+     timeout. A command still there 2 seconds after the kill is left running, the log says so, and the script
+     goes on.
+  3. Takes the first line of the output that matches, case aside,
+     `resolution:\s*x\s*=\s*([0-9]{2,4}),\s*y\s*=\s*([0-9]{2,4})`, as upstream's `source/tools/capture_headunit.py`
+     does, and makes `<x>x<y>` of it. The output of a command that had to be killed is not read.
+  4. Uses that size if it is one of `@SIZES@` and both its files are under `layouts/<size>/`. Otherwise it uses
+     the base size and prints one line saying what it saw: no `LayerManagerControl`, no resolution in its output
+     (with its exit status if that was not 0), no answer within 5 seconds, a size with no layout, or a known size
+     with a file missing. Not finding the size is never an error.
+  5. Copies the two files to `.select-layout.xml` and `.select-layout.zip` beside the active files, then renames
+     each over its active file, so a file the HMI has open is never written into. On an upgrade it first keeps a
+     copy of the active `<Folder>.xml` as `.select-layout.xml.old`, to put back if the second rename fails. With
+     `umask 022` the files are mode 0644.
+  6. If a copy or a rename fails, it removes its temporary files and exits 1. On an install it also removes the
+     two active files, so the agent's undo finds the plugin folder empty and removes it. On an upgrade the
+     previous active files stay as they were.
+  7. Removes `.select-layout.screen` and its other files on every way out, and prints one line naming the size
+     it placed. It touches nothing else in the plugin folder.
+- `remove-layout.sh` (`preRemove`) removes the two active files and any `.select-layout.*` file a stopped
+  `select-layout.sh` left, and nothing else, so an owner's `gateway-ip.txt` stays. It exits 0 when they are not
+  there and when `NBT_VAR_PLUGINS_DIR` is not set (it says so), and 1 only when a file is still there after it
+  tried. If it fails, the agent logs it and removes the package anyway. An upgrade does not run the old version's
+  `preRemove`: the new version's `postInstall` writes over the active files instead.
+- If `postInstall` fails, the agent undoes the install: it removes the files it placed and the folders it made,
+  a folder only if it is empty. If it times out, the agent kills the hook's whole process group.
 
 ## Making a release
 
