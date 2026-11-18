@@ -1,0 +1,93 @@
+{
+  "namespace": "com.github.nbtapps",
+  "requires_agent": ">=1.6.0",
+  "plugins_root": "/var/opt/hmi/data/ID5/Plugins",
+  "base_size": "1280x480",
+  "generated_sizes": ["800x480", "960x480", "1440x540", "1920x720"],
+  "apps": [
+    {
+      "key": "boostdeck",
+      "name": "BoostDeck",
+      "folder": "BoostDeck",
+      "zip": "packages/dashboard.zip",
+      "workers": ["boostdeck-collector-qnx"],
+      "connector": 100,
+      "images": true,
+      "layouts": true
+    },
+    {
+      "key": "shiftdeck",
+      "name": "ShiftDeck",
+      "folder": "ShiftDeck",
+      "zip": "packages/dashboard.zip",
+      "workers": ["shift-deck-qnx"],
+      "connector": 104,
+      "images": true,
+      "layouts": true
+    },
+    {
+      "key": "engine-fault-codes",
+      "name": "Engine Fault Codes",
+      "folder": "EngineCodes",
+      "zip": "packages/dashboard.zip",
+      "workers": ["engine-codes-qnx"],
+      "connector": 102,
+      "images": true,
+      "layouts": true
+    },
+    {
+      "key": "mhd-suite",
+      "name": "MHD+ Suite",
+      "folder": "MhdMaps",
+      "zip": "packages/dashboard.zip",
+      "workers": ["mhd-maps-qnx", "exhaust-flap-worker-qnx"],
+      "connector": 103,
+      "images": true,
+      "layouts": true,
+      "conflicts": ["bootmod3-suite"]
+    },
+    {
+      "key": "bootmod3-suite",
+      "name": "Bootmod3 Suite",
+      "folder": "Bootmod3Suite",
+      "zip": "packages/bootmod3.zip",
+      "workers": ["bootmod3-qnx"],
+      "connector": 111,
+      "images": true,
+      "layouts": true,
+      "conflicts": ["mhd-suite"],
+      "licenses": ["source/third-party/idrive7-apps-LICENSE"]
+    },
+    {
+      "key": "xdrive-control",
+      "name": "xDrive Control",
+      "folder": "XDriveControl",
+      "zip": "packages/xdrive.zip",
+      "workers": ["xdrive-control-qnx"],
+      "connector": 112,
+      "images": false,
+      "layouts": false,
+      "licenses": ["source/third-party/idrive7-apps-LICENSE"]
+    },
+    {
+      "key": "road-jet",
+      "name": "Road Jet",
+      "folder": "RoadJet",
+      "zip": "packages/road-jet.zip",
+      "workers": ["road-jet-qnx"],
+      "connector": 217,
+      "images": true,
+      "layouts": false
+    },
+    {
+      "key": "beamer",
+      "name": "BEAMer",
+      "folder": "BEAMer",
+      "zip": "packages/beamer.zip",
+      "workers": ["beamer-qnx"],
+      "connector": 218,
+      "images": true,
+      "layouts": false
+    }
+  ]
+}

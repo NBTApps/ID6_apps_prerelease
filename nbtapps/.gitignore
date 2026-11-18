@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: MIT
+# Built archives, records, keys and Python's caches are never committed.
+*.nbtpkg
+*.nbtpkg.part
+nbtpkg-record.json
+*.key
+/out/
+__pycache__/
