@@ -101,9 +101,10 @@ make their own throwaway keys.
 ## Layouts and hooks
 
 Five apps (`"layouts": true`) need a layout file per screen resolution. Upstream ships the 1280×480 one only.
-Two later steps add the rest: one generates the layouts, one writes the hook scripts that pick a layout on the
-head unit. Until both are in, `build` refuses these five apps and lists the files that are missing. Road Jet and
-BEAMer ship their 1280×480 layout only, with no hook. This is the contract the later steps follow.
+The rest come from two parts of this folder: `make_layouts.py` generates the layouts, and the hook scripts pick
+one on the head unit. `build` refuses one of these five apps when a file of either part is missing, and lists
+what is missing. Road Jet and BEAMer ship their 1280×480 layout only, with no hook. This is the contract both
+parts keep to.
 
 ### Layouts (the layout step)
 
@@ -276,9 +277,10 @@ after reading the change. A package whose bytes changed needs a new version numb
 
 - The author key. There is no `nbtapps/author.pub`, and so no signed build. Tom makes the key.
 - The `nbtpkg` environment and its secret `NBTPKG_AUTHOR_KEY`.
-- `NBTAPPS_COMMIT` in the workflow: the NBTApps commit with `${var_plugins}` is not on GitHub yet.
-- The agent release that knows `${var_plugins}`. `requires_agent` is `>=1.6.0`, the planned number.
-- The layouts and hooks for the five apps that need them.
+- `NBTAPPS_COMMIT` in the workflow: the NBTApps commit with `${var_plugins}` is on a branch there, not yet on
+  `main`. Pin it once it is merged.
+- The agent release that knows `${var_plugins}`. `requires_agent` is `>=1.6.0`, which is not released yet.
+- The generated layouts have not been seen on a head unit, and the hook scripts have not run on one.
 - The connector ids in the catalogue's `hmi-ids.json`, and each package's first pull request in nbtapps-packages.
 - The workflow on GitHub: GitHub turns Actions off on a fork until they are turned on, and offers a
   `workflow_dispatch` workflow to run only once it is on the default branch.
