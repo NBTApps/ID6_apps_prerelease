@@ -1,0 +1,193 @@
+# SPDX-License-Identifier: MIT
+#
+# Builds one app's NBTApps package with nbtapps/make_nbtpkg.py, signs it with the author key, and publishes it as
+# a GitHub release <app>-v<version> holding two assets: <id>-<version>.nbtpkg and nbtpkg-record.json. The
+# nbtapps-packages bot proposes the version to the catalogue from that release. nbtapps/README.md has the steps.
+#
+# Started by hand only. The token can write contents (to make the release) and nothing else; neither checkout
+# keeps it. The author key is a secret of the `nbtpkg` environment and reaches the build step only, through its
+# environment; make_nbtpkg.py never writes it to disk or prints it. Inputs reach the scripts through env:, never
+# written into a run: line.
+#
+# A published version never changes: if the release exists, the run compares its archive with the one just
+# built, ends well if they are the same bytes and fails if not.
+#
+# NBTAPPS_COMMIT pins the commit of https://github.com/tom-pryor/nbtapps whose headunit/tools/nbtpkg.py and
+# headunit/spec/ build and check the archive. They are not under this repo's licence, so they are not copied
+# here. The commit that carries ${var_plugins} is not on GitHub yet, so the pin is empty and every run stops at
+# the first step until it is set to a full 40-character commit.
+name: nbtpkg
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "The app to package"
+        required: true
+        type: choice
+        options:
+          - boostdeck
+          - shiftdeck
+          - engine-fault-codes
+          - mhd-suite
+          - bootmod3-suite
+          - xdrive-control
+          - road-jet
+          - beamer
+      version:
+        description: "The package's version: X.Y.Z, or X.Y.Z-pre.N"
+        required: true
+        type: string
+      note:
+        description: "One line for the record's notes (optional)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nbtpkg-${{ inputs.app }}
+  cancel-in-progress: false
+
+env:
+  NBTAPPS_COMMIT: ""          # the NBTApps commit to build with; empty until it is on GitHub
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: nbtpkg
+    steps:
+      - name: Check the NBTApps pin
+        run: |
+          case "$NBTAPPS_COMMIT" in
+            "")
+              echo "::error::NBTAPPS_COMMIT in .github/workflows/nbtpkg.yml is empty. Set it to the NBTApps commit (40 hex characters) whose nbtpkg.py knows \${var_plugins}."
+              exit 1 ;;
+          esac
+          if ! printf '%s' "$NBTAPPS_COMMIT" | grep -Eqx '[0-9a-f]{40}'; then
+            echo "::error::NBTAPPS_COMMIT is not a full 40-character commit."
+            exit 1
+          fi
+
+      - name: Check out this repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check out nbtpkg.py and spec/ of NBTApps
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: tom-pryor/nbtapps
+          ref: ${{ env.NBTAPPS_COMMIT }}
+          path: .nbtapps
+          sparse-checkout: |
+            headunit/tools
+            headunit/spec
+          persist-credentials: false
+
+      - name: Install cryptography
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet --disable-pip-version-check cryptography==50.0.2
+
+      - name: Test the packaging script
+        env:
+          NBTAPPS_HEADUNIT: ${{ github.workspace }}/.nbtapps/headunit
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" -m unittest discover -s nbtapps/tests
+
+      - name: Build and sign
+        env:
+          NBTAPPS_HEADUNIT: ${{ github.workspace }}/.nbtapps/headunit
+          NBTPKG_AUTHOR_KEY: ${{ secrets.NBTPKG_AUTHOR_KEY }}
+          APP: ${{ inputs.app }}
+          VERSION: ${{ inputs.version }}
+          NOTE: ${{ inputs.note }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          set -- build --app "$APP" --version "$VERSION" --repo "$REPO" --require-key --out "$RUNNER_TEMP/out"
+          if [ -n "$NOTE" ]; then
+            set -- "$@" --note "$NOTE"
+          fi
+          "$RUNNER_TEMP/venv/bin/python" nbtapps/make_nbtpkg.py "$@"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          APP: ${{ inputs.app }}
+          VERSION: ${{ inputs.version }}
+          NOTE: ${{ inputs.note }}
+        run: |
+          set -eu
+          out="$RUNNER_TEMP/out"
+          record="$out/nbtpkg-record.json"
+          tag="$APP-v$VERSION"
+          commit=$(git rev-parse HEAD)
+          if [ ! -f "$record" ]; then
+            echo "::error::The build wrote no nbtpkg-record.json."
+            exit 1
+          fi
+          id=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["id"])' "$record")
+          name="$id-$VERSION.nbtpkg"
+          archive="$out/$name"
+          sha=$(sha256sum "$archive" | cut -d ' ' -f 1)
+          pinned=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["record"]["sha256"])' "$record")
+          if [ "$sha" != "$pinned" ]; then
+            echo "::error::The record does not pin the archive that was built."
+            exit 1
+          fi
+
+          # A published release of this tag: its archive must be these bytes.
+          if gh api "repos/$GH_REPO/releases/tags/$tag" > "$RUNNER_TEMP/release.json" 2> "$RUNNER_TEMP/release.err"; then
+            mkdir "$RUNNER_TEMP/published"
+            if ! gh release download "$tag" --pattern "$name" --dir "$RUNNER_TEMP/published"; then
+              echo "::error::Release $tag exists and has no $name."
+              exit 1
+            fi
+            there=$(sha256sum "$RUNNER_TEMP/published/$name" | cut -d ' ' -f 1)
+            if [ "$there" = "$sha" ]; then
+              echo "::notice::Release $tag already holds $name with these bytes ($sha). Nothing to do."
+              echo "Release $tag already holds $name, sha256 $sha: nothing changed." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "::error::Release $tag holds another $name (sha256 $there, built $sha). A published version never changes: raise the version."
+            exit 1
+          elif ! grep -q 'HTTP 404' "$RUNNER_TEMP/release.err"; then
+            cat "$RUNNER_TEMP/release.err" >&2
+            echo "::error::Could not ask GitHub whether release $tag exists."
+            exit 1
+          fi
+
+          # No published release. A draft or a bare tag of that name is left from something else: stop.
+          drafts=$(gh api --paginate "repos/$GH_REPO/releases" \
+            --jq ".[] | select(.draft and .tag_name == \"$tag\") | .id")
+          if [ -n "$drafts" ]; then
+            echo "::error::A draft release for $tag exists (from a run that did not finish?). Look at it and delete it, then run again."
+            exit 1
+          fi
+          if gh api "repos/$GH_REPO/git/ref/tags/$tag" > /dev/null 2>&1; then
+            echo "::error::The tag $tag exists without a release. Look at it and delete it, then run again."
+            exit 1
+          fi
+
+          notes="Package $id $VERSION for NBTApps, built from $commit."
+          if [ -n "$NOTE" ]; then
+            notes="$notes
+
+          $NOTE"
+          fi
+          gh release create "$tag" --draft --prerelease --target "$commit" --title "$APP $VERSION" \
+            --notes "$notes" "$archive" "$record"
+          gh release edit "$tag" --draft=false
+          {
+            echo "Published $tag at $commit as a pre-release:"
+            echo
+            echo "- $name, sha256 $sha"
+            echo "- nbtpkg-record.json"
+          } >> "$GITHUB_STEP_SUMMARY"
