@@ -315,10 +315,10 @@ needs a new version number.
 
 ## Not done yet
 
-- The workflow has never run, so no release exists and the secret `NBTPKG_AUTHOR_KEY` in the `nbtpkg`
-  environment has not signed anything yet.
-- The agent release that knows `${var_plugins}`, and the phone app release that does. `requires_agent` is
-  `>=1.6.0`, which is not released yet.
+- The agent release that knows `${var_plugins}`, and the phone app release that does. Agent 1.6.0 is out as
+  1.6.0-beta.1 only, which sorts below 1.6.0, so `requires_agent` is `>=1.6.0-beta.1`: with `>=1.6.0`, as version
+  0.1.0 of each package has it, the beta agent refuses the package as `agent-too-old`. `nbtpkg.py` looks at the
+  three numbers only, so its rule for `${var_plugins}` is met.
 - The generated layouts have not been seen on a head unit, and the hook scripts have not run on one. The
   1440×540 choice for BoostDeck and ShiftDeck rests on upstream's issue reports alone.
 - The connector ids in the catalogue's `hmi-ids.json`, and each package's first pull request in nbtapps-packages.

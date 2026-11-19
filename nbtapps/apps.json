@@ -1,6 +1,6 @@
 {
   "namespace": "com.github.nbtapps",
-  "requires_agent": ">=1.6.0",
+  "requires_agent": ">=1.6.0-beta.1",
   "plugins_root": "/var/opt/hmi/data/ID5/Plugins",
   "base_size": "1280x480",
   "generated_sizes": ["800x480", "960x480", "1440x540", "1920x720"],
