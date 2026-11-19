@@ -19,7 +19,7 @@ The reference dashboard build uses **NBTevo_N18032I** at **1280 × 480**. The de
 | libAppFramework.A.so | 93f4c7ab7e59c0adf7923b9b491de06165ba9d97bbe7412292e7ddc418ca2123 |
 | libCoreFramework.A.so | 64ba154c68c772f9ca779fc18507f5b34715be58ded4a198b8a62b90d16c3ee0 |
 
-Check the gateway used by the payload, 169.254.21.3. For a different gateway, write its IPv4 address to gateway-ip.txt in each dashboard app folder. If the firmware, frameworks, or resolution differ, follow the [porting workflow](source/docs/PORTING.md) to verify compatibility. Native changes need the QNX SDP 6.5 Linux host tools and ARM GCC 4.4.2. Matching packaged binaries and compatible layout resource changes do not need QNX on the ENET computer.
+Check the gateway used by the payload, 169.254.21.3. For a different gateway, write its IPv4 address to gateway-ip.txt in each dashboard app folder. For other listed profiles, verify both hashes in the [compatibility matrix](source/docs/COMPATIBILITY.md) and use the desktop installer for the active display. For an unlisted firmware or framework pair, follow the [porting workflow](source/docs/PORTING.md) to verify compatibility. Native changes need the QNX SDP 6.5 Linux host tools and ARM GCC 4.4.2. Matching packaged binaries and compatible layout resource changes do not need QNX on the ENET computer.
 
 If you need the toolchain for a native build, the [QNX SDP 6.5 archive](https://archive.org/details/qnxsdp-65.7z) includes the SDK and a license key generator, according to the archive listing. See [Build and deploy](source/docs/BUILD.md) for toolchain setup.
 

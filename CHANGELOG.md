@@ -1,5 +1,8 @@
 # Change notes
 
+- **Desktop installers v0.7.3 beta** add eleven firmware and framework profiles and manual firmware and display selection when automatic detection cannot read them.
+- **BoostDeck** saves color and units across iDrive restarts. **ShiftDeck** saves units and shift-light RPM.
+
 - **MOST fallback** covers Bootmod3 map switching, Exhaust Flap and Active Sound, plus the dedicated Exhaust Flap submenu in MHD+ Suite. Bootmod3 burble presets and xDrive still require HSFZ.
 - **Desktop installers v0.7.1 beta** embed both rebuilt workers.
 

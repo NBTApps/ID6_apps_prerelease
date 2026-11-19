@@ -4,7 +4,7 @@ Connect your parked car to a computer over wired ENET. Open an AI agent with ter
 
 ## Desktop installer (beta)
 
-[Download the macOS or Windows installer](https://github.com/inotbarnacle/ID6_apps_prerelease/releases/tag/installer-v0.7.0). Follow the [setup, install, and uninstall guide](Installer.md). Temporary SSH must be enabled before opening the installer.
+[Download the macOS or Windows installer](https://github.com/inotbarnacle/ID6_apps_prerelease/releases). Follow the [setup, install, and uninstall guide](Installer.md). Temporary SSH must be enabled before opening the installer.
 
 ## iDrive 6 compatibility
 

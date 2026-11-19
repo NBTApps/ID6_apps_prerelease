@@ -5,6 +5,7 @@
 #include "dial_scales.h"
 #include "diagnostic_worker.h"
 #include "diagnostic_gateway.h"
+#include "gauge_preferences.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -33,6 +34,7 @@ const unsigned kPollKey = 0x4244504cu; // BDPL, private to this app
 const unsigned kActivePollIntervalMs = 25u;
 const unsigned kIdlePollIntervalMs = 250u;
 const char kCollector[] = "/var/opt/hmi/data/ID5/Plugins/BoostDeck/boostdeck-collector-qnx";
+const char kPreferences[] = "/var/opt/hmi/data/ID5/BoostDeck.prefs";
 const unsigned kBarCount = sizeof(kDialScales)/sizeof(kDialScales[0]);
 #ifdef PERF_LAB
 typedef char dial_count_check[kBarCount + 1 == BD_COUNT ? 1 : -1];
@@ -52,9 +54,7 @@ class BoostDeck : public bmw::PluginApp {
     bool stopping_;
     bool gauges_visible_;
     unsigned color_;
-#ifdef PERF_LAB
     bool metric_;
-#endif
     uint64_t retry_at_;
     void startVisibleCollector();
     void selectColor(unsigned color);
@@ -67,9 +67,7 @@ public:
         : bmw::PluginApp(d,name,maj,mn,rhmi,cfg,res), fd_(-1), poll_generation_(0),
           received_(0), collector_(-1), stopping_(false), gauges_visible_(false),
           color_(0),
-#ifdef PERF_LAB
           metric_(false),
-#endif
           retry_at_(0) {
         resetDisplay();
     }
@@ -79,12 +77,14 @@ public:
     virtual bool invokeDataUpdate(unsigned key, const bmw::Parcel& data);
     bool gaugeVisibility(const bmw::Parcel&);
     template <unsigned Color> bool changeColor(const bmw::Parcel&) {
+        saveGaugePreferences(kPreferences, Color, metric_);
         selectColor(Color);
         return true;
     }
 #ifdef PERF_LAB
     template <bool Metric> bool changeUnits(const bmw::Parcel&) {
         metric_=Metric;
+        saveGaugePreferences(kPreferences, color_, metric_);
         refresh();
         return true;
     }
@@ -160,6 +160,7 @@ bool BoostDeck::onInit() {
     action.m_exec=&Action::execImpl<BoostDeck,&BoostDeck::changeUnits<true> >;
     addHandler(59u,action);
 #endif
+    loadGaugePreferences(kPreferences, sizeof kColorNames / sizeof kColorNames[0], color_, metric_);
     selectColor(color_);
     bmw::Parcel visible(true);
     for (unsigned i=0;i<kBarCount;++i) setProperty(200u+i,3u,visible);

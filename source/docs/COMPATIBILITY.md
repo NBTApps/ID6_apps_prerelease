@@ -1,10 +1,10 @@
 # Dashboard compatibility
 
-Match the reported firmware and both SHA-256 hashes before using the dashboard package. The desktop installers also check the display and generate layouts for 800 × 480, 960 × 480, 1280 × 480, 1440 × 540, and 1920 × 720. The raw dashboard ZIP uses the 1280 × 480 layout.
+Match the reported firmware and both SHA-256 hashes before using the dashboard package. The desktop installers also check the display and select bundled layouts for 800 × 480, 960 × 480, 1280 × 480, 1440 × 540, and 1920 × 720. The raw dashboard ZIP uses the 1280 × 480 layout.
 
-## Tested and working installer profiles
+## Desktop installer profiles
 
-The installer accepts these exact firmware and framework combinations. The evidence column describes what worked on each firmware and where the result came from.
+The installer accepts the exact firmware and framework pairs in [installer-profiles.json](installer-profiles.json). Reported results apply to the named menus and vehicles.
 
 | NBTevo firmware | AppFramework SHA-256 | CoreFramework SHA-256 | Evidence |
 | --- | --- | --- | --- |
@@ -12,24 +12,27 @@ The installer accepts these exact firmware and framework combinations. The evide
 | N18092I | Same as N18032I | Same as N18032I | **Tested and working** on wired ENET with an earlier package, per [owner report](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/31). The reported framework pair matches N18032I. |
 | P18362I | `d9c674c210272e8f07473e73e59ed8f23d984d4d30162971bedb56d21c682b28` | `896d9de22fa85f7f5aa4fc2a0e62003c63c41c47186b06f39a2fd4fee06fa5d5` | **Tested and working** for gauges over wired ENET on an earlier package, per the [owner report](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/8). The current plugin build also loaded in the QNX emulator. |
 | V20153I | `085b7f2a9f96734be51621a70a04c24d01525eb5e9852f45c845a7d2f4ae4c67` | `56705e56c349d9ae57a7782bd39b795cfc01391ba8ff155046f32fbe8ffad2cb` | Exact match to the capture used for the earlier QNX load check |
-| Y24073J | `ef2488b007d592301d8f21d9aa60771ad552d06b5e97c29e7813e3946644d820` | `cb0e488d1ebe2e30de87bb56f0e93d6a2d76b44309b0b47fef5b0b7cec048973` | Exact match to the capture used for the earlier QNX load check |
+| Y24073J | `ef2488b007d592301d8f21d9aa60771ad552d06b5e97c29e7813e3946644d820` | `cb0e488d1ebe2e30de87bb56f0e93d6a2d76b44309b0b47fef5b0b7cec048973` | Earlier QNX load check passed. [#56](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/56) and [#77](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/77) report clipped or empty display content. |
 
-These checks concern the head unit. Available gauges and controls depend on the vehicle ECU and tune. The two distinct gateway paths reported for [T23235J](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/37) and the reference car are handled through `gateway-ip.txt`. The installer still requires a matched firmware profile. For T23235J, use the [read-only capture tool](../tools/capture_headunit.py) to collect the framework evidence for a port. S19322I has a statically checked pair [below](#static-framework-checks). Compare both hashes against the target car before planning a parked load check. See [issue #27](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/27) for the reported R19144I HMI freeze.
+### Added in installer v0.7.3
 
-## Other reported firmware
-
-| NBTevo firmware | Reported result |
+| NBTevo firmware | Evidence |
 | --- | --- |
-| K17052I | [Support request #34](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/34) |
-| R19144I | [Reported HMI freeze #27](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/27) |
-| S19322I | [Capture report #38](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/38) and static checks below |
-| T23235J | [BoostDeck and Engine Fault Codes opened](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/37) on the reported Supra. Its earlier package could not reach the diagnostic gateway. |
-| U19384I | [Capture report #4](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/4) and static checks below |
-| V20153J | [Reported controller compatibility #25](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/25) |
-| X20511I | [Capture report #16](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/16) and static checks below |
-| Y21432J | [Capture report #1](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/1) and static checks below |
-| Y22292I | [Contributor reported a working custom Bootmod3 build #42](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/42) |
-| Y23236I | [Capture report #40](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/40) |
+| L17252I | Attached capture matches the audited M17345I pair byte for byte. |
+| M17365I | [#60](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/60) matches the audited M17345I pair. |
+| Q18491I | The attached libraries match R19101I. The rebuilt BoostDeck and ShiftDeck pass the reference ABI comparison. **Tested and working** for BoostDeck in [#76](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/76), which also reports gateway errors in Bootmod3 Suite and BEAMer. |
+| R19144I | The attached report matches the same R19101I pair. **Tested and working** for MHD+ Suite and Engine Fault Codes in [#27](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/27); the same report describes reproducible HMI freezes with BoostDeck and ShiftDeck. The installer accepts this profile. |
+| S19322I | [#38](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/38) matches the audited S19221I pair. |
+| T18501I | [#53](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/53) matches the audited R19101I pair. |
+| U19384I | [#4](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/4) matches the audited U19384I pair. |
+| X20511I | [#73](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/73) matches the audited X20511I pair. |
+| Y21432J | **Tested and working** for BoostDeck in [#62](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/62). ShiftDeck and Engine Fault Codes also opened. xDrive mode switching still depends on the DSC version. |
+| Y22292I | **Tested and working** for BoostDeck and ShiftDeck in [#59](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/59#issuecomment-6967237281). The owner supplied a passing ABI audit. Engine Fault Codes opened, but the displayed code meanings were not confirmed. |
+| Y23236I | **Tested and working** for MHD+ Suite, ShiftDeck, and Engine Fault Codes in [#69](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/69). BoostDeck worked after an initial crash; transmission temperature was missing with the engine running. [#40](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/40) provides the matching hashes. |
+
+K17052I ([#34](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/34)), T23235J ([#37](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/37)), and V20153J ([#25](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/25)) still need a verified framework pair for installer support. T23235J uses a different reported gateway. Run the [read-only capture tool](../tools/capture_headunit.py) to collect the firmware, display and framework evidence.
+
+The 320d handoff matches the existing N18032I firmware profile. ShiftDeck RPM and BoostDeck transmission temperature were observed working. Dynamic diesel pressure and intake requests remain unshipped because the draft redefines a shared ECU diagnostic slot and independent validation is incomplete. Firmware compatibility does not determine which engine signals or tuning controls a vehicle supports.
 
 ## Static framework checks
 
@@ -58,7 +61,7 @@ Results:
 Open points:
 
 - The original ten-build audit used ID5_1911 as its reference. The downloadable fingerprint now uses the N18032I reference capture.
-- R19101I has the framework sizes reported for R19144I (51580 and 95400 bytes). R19144I itself was not inspected, and its [HMI freeze report](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/27) is unexplained by these checks.
+- The R19144I report matches both R19101I framework hashes. Its [HMI freeze report](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/27) is unexplained by these checks.
 - The audit compares instruction prefixes and vtable slots. It does not show that a plugin loads or that its menus work.
 
 ## xDrive Control (experimental)
