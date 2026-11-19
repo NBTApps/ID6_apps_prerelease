@@ -17,8 +17,8 @@ never changed here.
 
 | Key | Name | Plugin folder | From | Connector id | Layouts |
 |---|---|---|---|---|---|
-| `boostdeck` | BoostDeck | `BoostDeck` | `packages/dashboard.zip` | 100 | per screen size |
-| `shiftdeck` | ShiftDeck | `ShiftDeck` | `packages/dashboard.zip` | 104 | per screen size |
+| `boostdeck` | BoostDeck | `BoostDeck` | `packages/dashboard.zip` | 100 | per screen size, 1280×480 at 1440×540 |
+| `shiftdeck` | ShiftDeck | `ShiftDeck` | `packages/dashboard.zip` | 104 | per screen size, 1280×480 at 1440×540 |
 | `engine-fault-codes` | Engine Fault Codes | `EngineCodes` | `packages/dashboard.zip` | 102 | per screen size |
 | `mhd-suite` | MHD+ Suite | `MhdMaps` | `packages/dashboard.zip` | 103 | per screen size |
 | `bootmod3-suite` | Bootmod3 Suite | `Bootmod3Suite` | `packages/bootmod3.zip` | 111 | per screen size |
@@ -42,7 +42,7 @@ payload/<Folder>/lib<Folder>.so          -> ${var_plugins}/<Folder>/            
 payload/<Folder>/<Folder>.manifest
 payload/<Folder>/<Folder>.xml            (apps without layouts only)
 payload/<Folder>/<Folder>_ALL_Images.zip (apps without layouts, if the app has images)
-payload/<Folder>/layouts/<WxH>/...       (apps with layouts: every size, see below)
+payload/<Folder>/layouts/<WxH>/...       (apps with layouts: each size the app has a layout for, see below)
 payload/bin/<worker>                     -> ${var_plugins}/<Folder>/<worker>    mode 0755, each worker
 hooks/select-layout.sh                   postInstall, 30 s (apps with layouts)
 hooks/remove-layout.sh                   preRemove, 30 s (apps with layouts)
@@ -64,6 +64,12 @@ Before it builds, `make_nbtpkg.py build` refuses the app unless:
   updated for it;
 - the library and the workers are 32-bit little-endian ARM ELF files (a shared library, and programs);
 - the library holds `/var/opt/hmi/data/ID5/Plugins/<Folder>/<worker>` for each worker;
+- every absolute path the library or a worker holds as a whole string is one this folder knows: `/dev/null`, a
+  path under `/lib/`, `/usr/lib/` or `/opt/sys/lib/`, a path in the plugin's own folder, or a path `apps.json`
+  names under the app's `written`; and the library holds each `written` path. A path upstream adds later stops
+  the build until someone has read what the plugin does with it (see [Files a plugin
+  writes](#files-a-plugin-writes)). The check sees a path that is a string of its own in the file. It does not
+  see one the program puts together while it runs;
 - `<Folder>.manifest` is XML with no DOCTYPE or ENTITY, and names `<Folder>`, `{pluginDir}/<Folder>`,
   `{pluginDir}/<Folder>.xml`, `{pluginDir}/<Folder>_ALL_Images.zip` (or no image file, for an app without
   images) and exactly the connector id in `apps.json`;
@@ -170,9 +176,22 @@ order, each of the size the rule gives; `SOURCE` matches the zip; nothing else i
 synthetic input (XML and images by the rule, copies of unchanged images, `--check`, the refusals, writing a folder
 whole) need Pillow, and are skipped without it, as they are in the workflow.
 
+### Sizes at which an app shows the base layout
+
+An app's `base_layout_at` in `apps.json` lists generated sizes at which its package holds no layout and the
+head unit shows the base one. BoostDeck and ShiftDeck have `["1440x540"]`. Upstream's issue #56 reports, from a
+1440×540 head unit on NBTevo_Y24073J, that their 1440×540 layouts are wider than the part of the screen an app
+gets, so the right-hand column is cut off; #75 and #77 look like the same fault. The generated layouts here are
+the same files as the desktop installer's (checked against v0.7.3), so they would be cut off too. The 1280×480
+layout is narrower and fits, with room left over. This has not been seen on a head unit: take the key out once
+upstream's layout fits, or once a 1440×540 car shows that it does.
+
+The layouts of such a size stay committed under `nbtapps/layouts/`, and `make_layouts.py` still makes and checks
+them. `build` leaves them out of the archive and out of `@SIZES@`.
+
 ### What the archive holds
 
-Every size, the base size included, goes to `payload/<Folder>/layouts/<WxH>/`, and so to
+Every size the app has a layout for, the base size included, goes to `payload/<Folder>/layouts/<WxH>/`, and so to
 `${var_plugins}/<Folder>/layouts/<WxH>/<Folder>.xml` and `..._ALL_Images.zip` on the head unit. Nothing is
 placed at `${var_plugins}/<Folder>/<Folder>.xml` or `${var_plugins}/<Folder>/<Folder>_ALL_Images.zip`: the
 `postInstall` hook makes those two files. They are in no package's record, so the agent never writes over them or
@@ -181,10 +200,12 @@ removes them.
 ### Hooks (the hook step)
 
 - Templates are committed at `nbtapps/hooks/select-layout.sh.in` and `nbtapps/hooks/remove-layout.sh.in`.
-- `build` fills in `@FOLDER@` (the plugin folder), `@BASE_SIZE@` (`1280x480`) and `@SIZES@` (every size joined
-  with `|`, base first: `1280x480|800x480|960x480|1440x540|1920x720`, for a shell `case`). It refuses a template
-  in which any other `@NAME@` is left. The results are `hooks/select-layout.sh` (`postInstall`) and
-  `hooks/remove-layout.sh` (`preRemove`), each with a 30 second timeout.
+- `build` fills in `@FOLDER@` (the plugin folder), `@BASE_SIZE@` (`1280x480`), `@SIZES@` (the sizes the package
+  holds a layout for, joined with `|`, base first: `1280x480|800x480|960x480|1440x540|1920x720`, for a shell
+  `case`), `@BASE_AT@` (the app's `base_layout_at` sizes joined the same way, or `none`, which is no size) and
+  `@WRITTEN@` (the app's `written` paths with spaces between, or nothing). It refuses a template in which any
+  other `@NAME@` is left. The results are `hooks/select-layout.sh` (`postInstall`) and `hooks/remove-layout.sh`
+  (`preRemove`), each with a 30 second timeout.
 - The agent runs a hook with its shell, from a folder of its own that holds the package's files (for
   `postInstall`) or its hooks (for `preRemove`), as root on a car. Use `$NBT_VAR_PLUGINS_DIR`, not the
   current folder, to find the plugin. It gives
@@ -208,8 +229,8 @@ removes them.
      does, and makes `<x>x<y>` of it. The output of a command that had to be killed is not read.
   4. Uses that size if it is one of `@SIZES@` and both its files are under `layouts/<size>/`. Otherwise it uses
      the base size and prints one line saying what it saw: no `LayerManagerControl`, no resolution in its output
-     (with its exit status if that was not 0), no answer within 5 seconds, a size with no layout, or a known size
-     with a file missing. Not finding the size is never an error.
+     (with its exit status if that was not 0), no answer within 5 seconds, a size with no layout, a size in
+     `@BASE_AT@`, or a known size with a file missing. Not finding the size is never an error.
   5. Copies the two files to `.select-layout.xml` and `.select-layout.zip` beside the active files, then renames
      each over its active file, so a file the HMI has open is never written into. On an upgrade it first keeps a
      copy of the active `<Folder>.xml` as `.select-layout.xml.old`, to put back if the second rename fails. With
@@ -220,19 +241,37 @@ removes them.
   7. Removes `.select-layout.screen` and its other files on every way out, and prints one line naming the size
      it placed. It touches nothing else in the plugin folder.
 - `remove-layout.sh` (`preRemove`) removes the two active files and any `.select-layout.*` file a stopped
-  `select-layout.sh` left, and nothing else, so an owner's `gateway-ip.txt` stays. It exits 0 when they are not
-  there and when `NBT_VAR_PLUGINS_DIR` is not set (it says so), and 1 only when a file is still there after it
-  tried. If it fails, the agent logs it and removes the package anyway. An upgrade does not run the old version's
-  `preRemove`: the new version's `postInstall` writes over the active files instead.
+  `select-layout.sh` left, and nothing else in the plugin folder, so an owner's `gateway-ip.txt` stays. Before
+  that it removes the app's `written` files (see [Files a plugin writes](#files-a-plugin-writes)), and says which
+  it removed. It exits 0 when the files are not there and when `NBT_VAR_PLUGINS_DIR` is not set (it says so, and
+  still removes the `written` files), and 1 only when a file is still there after it tried. If it fails, the
+  agent logs it and removes the package anyway. An upgrade does not run the old version's `preRemove`: the new
+  version's `postInstall` writes over the active files instead, and what the app saved stays.
 - If `postInstall` fails, the agent undoes the install: it removes the files it placed and the folders it made,
   a folder only if it is empty. If it times out, the agent kills the hook's whole process group.
+
+### Files a plugin writes
+
+A plugin may write files while it runs. The agent removes what a package placed and nothing else, so such a file
+would stay on the head unit after the package is gone. An app's `written` in `apps.json` lists the files its
+plugin writes outside its own folder, by their full paths, and `remove-layout.sh` removes them when the package
+is removed, with the temporary files the plugin makes beside them (`<file>.XXXXXX`, six characters). It never
+removes a folder. Should the agent ever run it for an upgrade (`NBT_ACTION=upgrade`), it leaves them.
+
+BoostDeck and ShiftDeck save their colour, units and shift-light settings in
+`/var/opt/hmi/data/ID5/BoostDeck.prefs` and `/var/opt/hmi/data/ID5/ShiftDeck.prefs` (four bytes each, see
+`source/native/src/gauge_preferences.h`). The settings survive an upgrade and go with a removal.
+
+Only an app with layouts has the hook, so `written` is refused for the others. `gateway-ip.txt` is not listed:
+an owner writes it, the plugin only reads it, and it stays.
 
 ## Making a release
 
 A release is made by the workflow `nbtpkg` (`.github/workflows/nbtpkg.yml`), started by hand in the Actions tab
 with the app, the version and an optional note. It:
 
-1. stops at once while `NBTAPPS_COMMIT`, the pinned NBTApps commit, is empty;
+1. stops at once if `NBTAPPS_COMMIT`, the pinned NBTApps commit, is empty or not a full commit. It is the
+   commit nbtapps-packages pins in its own workflows;
 2. checks out this repo and NBTApps' `headunit/tools` and `headunit/spec` at that commit;
 3. runs the tests, then `build --require-key` with the key from the `nbtpkg` environment's secret
    `NBTPKG_AUTHOR_KEY`;
@@ -262,8 +301,9 @@ python3 -m unittest discover -s nbtapps/tests
 ```
 
 Then build each app. If upstream changed an app, its checks say what changed: a new file, another connector id, a
-new worker, or a base layout that makes `SOURCE` stale. Update `apps.json`, the layouts or this script to match,
-after reading the change. A package whose bytes changed needs a new version number.
+new worker, a path in a library or worker that is not known here, or a base layout that makes `SOURCE` stale.
+Update `apps.json`, the layouts or this script to match, after reading the change. A package whose bytes changed
+needs a new version number.
 
 ## Notes
 
@@ -273,15 +313,15 @@ after reading the change. A package whose bytes changed needs a new version numb
 - A head unit with an app installed by hand in the same folder refuses the package (`stock-mismatch`). The
   owner moves the hand-installed folder out of `Plugins` first.
 
-## Not set up yet
+## Not done yet
 
-- The author key. There is no `nbtapps/author.pub`, and so no signed build. Tom makes the key.
-- The `nbtpkg` environment and its secret `NBTPKG_AUTHOR_KEY`.
-- `NBTAPPS_COMMIT` in the workflow: the NBTApps commit with `${var_plugins}` is on a branch there, not yet on
-  `main`. Pin it once it is merged.
-- The agent release that knows `${var_plugins}`. `requires_agent` is `>=1.6.0`, which is not released yet.
-- The generated layouts have not been seen on a head unit, and the hook scripts have not run on one.
+- The workflow has never run, so no release exists and the secret `NBTPKG_AUTHOR_KEY` in the `nbtpkg`
+  environment has not signed anything yet.
+- The agent release that knows `${var_plugins}`, and the phone app release that does. `requires_agent` is
+  `>=1.6.0`, which is not released yet.
+- The generated layouts have not been seen on a head unit, and the hook scripts have not run on one. The
+  1440×540 choice for BoostDeck and ShiftDeck rests on upstream's issue reports alone.
 - The connector ids in the catalogue's `hmi-ids.json`, and each package's first pull request in nbtapps-packages.
-- The workflow on GitHub: GitHub turns Actions off on a fork until they are turned on, and offers a
-  `workflow_dispatch` workflow to run only once it is on the default branch.
+- No package checks the head unit's firmware. Upstream's desktop installer accepts the firmware and framework
+  pairs in `source/docs/installer-profiles.json` only.
 - The licence of the fork's own files is MIT, as upstream's source is. This is not confirmed yet.

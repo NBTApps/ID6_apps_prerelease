@@ -13,7 +13,9 @@
       "workers": ["boostdeck-collector-qnx"],
       "connector": 100,
       "images": true,
-      "layouts": true
+      "layouts": true,
+      "base_layout_at": ["1440x540"],
+      "written": ["/var/opt/hmi/data/ID5/BoostDeck.prefs"]
     },
     {
       "key": "shiftdeck",
@@ -23,7 +25,9 @@
       "workers": ["shift-deck-qnx"],
       "connector": 104,
       "images": true,
-      "layouts": true
+      "layouts": true,
+      "base_layout_at": ["1440x540"],
+      "written": ["/var/opt/hmi/data/ID5/ShiftDeck.prefs"]
     },
     {
       "key": "engine-fault-codes",

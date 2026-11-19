@@ -32,7 +32,7 @@ SHELL = shlex.split(os.environ.get("HOOK_SHELL") or "sh")
 SHELL[0] = shutil.which(SHELL[0]) or SHELL[0]
 
 TABLE = m.load_table(REPO_ROOT)
-APP = TABLE["apps"]["boostdeck"]
+APP = TABLE["apps"]["engine-fault-codes"]   # an app with a layout of every size and nothing it writes
 FOLDER = APP["folder"]
 XML, ZIP = "%s.xml" % FOLDER, "%s_ALL_Images.zip" % FOLDER
 BASE = TABLE["base_size"]
@@ -191,7 +191,16 @@ class StaticTests(unittest.TestCase):
                     self.assertEqual(m.PLACEHOLDER.findall(text), [], name)
                     self.assertIn("folder=%s\n" % app["folder"], text)
                 self.assertIn("base=%s\n" % BASE, hooks["select-layout.sh"])
-                self.assertIn("        %s)\n" % "|".join(SIZES), hooks["select-layout.sh"])
+                self.assertIn("        %s)\n" % "|".join(m.layout_sizes(TABLE, app)), hooks["select-layout.sh"])
+                base_at, written = app.get("base_layout_at", []), app.get("written", [])
+                self.assertIn("        %s)\n" % ("|".join(base_at) or "none"), hooks["select-layout.sh"])
+                self.assertIn('written="%s"\n' % " ".join(written), hooks["remove-layout.sh"])
+                if app["key"] in ("boostdeck", "shiftdeck"):
+                    self.assertEqual(base_at, ["1440x540"])
+                    self.assertNotIn("1440x540", m.layout_sizes(TABLE, app))
+                    self.assertEqual(written, ["/var/opt/hmi/data/ID5/%s.prefs" % app["folder"]])
+                else:
+                    self.assertEqual((base_at, written), ([], []))
 
     def test_syntax(self):
         work = tempfile.mkdtemp(prefix="hooks-syntax-")
@@ -257,9 +266,13 @@ class HookCase(unittest.TestCase):
         for tool in LACKING:
             write(os.path.join(self.bin, tool), "#!/bin/sh\necho %s >> '%s'\n" % (tool, self.called), 0o755)
         self.hooks = os.path.join(self.root, "unpacked")
-        for name, text in stamped().items():
-            write(os.path.join(self.hooks, "hooks", name), text)
+        self.use(APP)
         self.lmc_log = os.path.join(self.root, "lmc-called")
+
+    def use(self, app):
+        """Puts the hooks stamped for `app` (APP, or APP with other values) where run_hook runs them from."""
+        for name, text in stamped(app).items():
+            write(os.path.join(self.hooks, "hooks", name), text)
 
     def _cleanup(self):
         for top, dirs, _ in os.walk(self.root):
@@ -460,6 +473,26 @@ class SelectTests(HookCase):
                     time.sleep(0.05)
                 self.assertFalse(alive(pid), "the fake LayerManagerControl is still running")
 
+    def test_base_layout_at(self):
+        """At a size in base_layout_at the package holds no layout, and the base one is shown."""
+        self.use(dict(APP, base_layout_at=["1440x540", "800x480"]))
+        for size in ("1440x540", "800x480"):
+            shutil.rmtree(os.path.join(self.dir, "layouts", size))
+        for size in SIZES:
+            with self.subTest(size=size):
+                x, y = size.split("x")
+                self.fake_lmc(b"resolution: x=%s, y=%s\n" % (x.encode(), y.encode()))
+                if size in ("1440x540", "800x480"):
+                    self.assert_chosen(self.select(), BASE, "the screen is %s, and this app's layout of that size "
+                                                            "is reported not to fit it" % size)
+                else:
+                    self.assert_chosen(self.select(), size)
+        # A layout of that size left by an older version of the package is not used either.
+        self.put_layout("1440x540")
+        self.fake_lmc(b"resolution: x=1440, y=540\n")
+        self.assert_chosen(self.select("upgrade"), BASE, "the screen is 1440x540, and this app's layout of that "
+                                                         "size is reported not to fit it")
+
     def test_known_size_without_its_layout(self):
         shutil.rmtree(os.path.join(self.dir, "layouts", "800x480"))
         self.fake_lmc(b"resolution: x=800, y=480\n")
@@ -656,6 +689,75 @@ class RemoveTests(HookCase):
                 self.assertEqual(result.returncode, 0, result.text)
                 self.assertIn("NBT_VAR_PLUGINS_DIR is not set", result.text)
                 self.assertEqual(self.read(XML), b"active\n")
+
+    def saving(self):
+        """Stamps the hooks for an app that writes two files outside its folder. Returns their paths."""
+        saved = os.path.join(self.root, "saved")
+        paths = [os.path.join(saved, "%s.prefs" % FOLDER), os.path.join(saved, "deeper", "state.bin")]
+        os.makedirs(os.path.dirname(paths[1]))
+        self.use(dict(APP, written=paths))
+        return paths
+
+    def test_removes_what_the_app_saved(self):
+        prefs, state = self.saving()
+        temporary = prefs + ".Ab3x_9"
+        others = [prefs + ".bak", prefs + ".1234567", prefs + "2", os.path.join(os.path.dirname(prefs), "Other.prefs")]
+        for path in [prefs, temporary] + others:
+            write(path, "G\x01\x02\x01")
+        write(os.path.join(self.dir, XML), "active\n")
+        result = self.remove()
+        self.assertEqual(result.returncode, 0, result.text)
+        self.assertEqual(result.text.splitlines(), ["%s: removed what the app saved: %s %s" % (FOLDER, prefs, temporary),
+                                                    "%s: the active layout is removed" % FOLDER])
+        self.assertEqual([p for p in [prefs, temporary, state] if os.path.exists(p)], [])
+        self.assertEqual([p for p in others if not os.path.isfile(p)], [])
+        self.assertIsNone(self.read(XML))
+        self.assertTrue(os.path.isdir(os.path.dirname(state)))      # folders are never removed
+
+    def test_nothing_saved(self):
+        self.saving()
+        result = self.remove()
+        self.assertEqual((result.returncode, result.text), (0, "%s: the active layout is removed\n" % FOLDER))
+
+    def test_saved_files_stay_on_an_upgrade(self):
+        prefs, state = self.saving()
+        for path in (prefs, state, prefs + ".Ab3x_9"):
+            write(path, "kept")
+        result = self.run_hook("remove-layout.sh", "upgrade")
+        self.assertEqual((result.returncode, result.text), (0, "%s: the active layout is removed\n" % FOLDER))
+        self.assertEqual([p for p in (prefs, state, prefs + ".Ab3x_9") if not os.path.isfile(p)], [])
+
+    def test_saved_files_go_without_the_plugins_dir(self):
+        prefs, state = self.saving()
+        write(state, "x")
+        write(os.path.join(self.dir, XML), "active\n")
+        result = self.remove(plugins_dir=None)
+        self.assertEqual(result.returncode, 0, result.text)
+        self.assertEqual(result.text.splitlines()[0], "%s: removed what the app saved: %s" % (FOLDER, state))
+        self.assertIn("NBT_VAR_PLUGINS_DIR is not set", result.text)
+        self.assertFalse(os.path.exists(state))
+        self.assertEqual(self.read(XML), b"active\n")
+
+    def test_a_folder_at_a_saved_path_is_left(self):
+        prefs, state = self.saving()
+        os.makedirs(os.path.join(prefs, "inside"))
+        result = self.remove()
+        self.assertEqual(result.returncode, 0, result.text)
+        self.assertTrue(os.path.isdir(os.path.join(prefs, "inside")))
+
+    @unittest.skipIf(os.geteuid() == 0, "root writes into a read-only folder")
+    def test_cannot_remove_what_the_app_saved(self):
+        prefs, state = self.saving()
+        write(prefs, "x")
+        write(os.path.join(self.dir, XML), "active\n")
+        os.chmod(os.path.dirname(prefs), 0o555)
+        try:
+            result = self.remove()
+        finally:
+            os.chmod(os.path.dirname(prefs), 0o755)
+        self.assertEqual(result.returncode, 1, result.text)
+        self.assertIn("could not remove %s" % prefs, result.text)
+        self.assertIsNone(self.read(XML))                           # the rest is still removed
 
     @unittest.skipIf(os.geteuid() == 0, "root writes into a read-only folder")
     def test_cannot_remove(self):

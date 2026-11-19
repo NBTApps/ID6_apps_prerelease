@@ -80,6 +80,13 @@ SIZE = re.compile(r"[1-9][0-9]{2,4}x[1-9][0-9]{2,4}")
 ZIP_PATH = re.compile(r"packages/[A-Za-z0-9._-]+\.zip")
 REL_PATH = re.compile(r"(?!.*(?:^|/)\.\.?(?:/|$))[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*")
 PLACEHOLDER = re.compile(r"@[A-Z][A-Z0-9_]*@")
+ABS_FILE = re.compile(r"(?:/[A-Za-z0-9._-]+)+")   # a `written` path; it goes into a shell script as it is
+# An absolute path as a whole string of a binary: after a byte that is no printable character, up to a NUL, with a
+# second slash in it. Paths a program builds at run time, or keeps inside a longer string, are not seen.
+PATH_STRING = re.compile(rb"(?<![\x21-\x7e])/[\x21-\x7e]+/[\x21-\x7e]*(?=\x00)")
+# Where a plugin's files may name paths without a word here: the null device and the system's libraries.
+KNOWN_PATHS = ("/dev/null",)
+KNOWN_FOLDERS = ("/lib/", "/usr/lib/", "/opt/sys/lib/")
 
 EM_ARM, ET_EXEC, ET_DYN = 40, 2, 3
 
@@ -126,7 +133,7 @@ def load_table(root=ROOT):
     apps = {}
     folders, connectors = set(), set()
     required = {"key", "name", "folder", "zip", "workers", "connector", "images", "layouts"}
-    optional = {"conflicts", "licenses"}
+    optional = {"conflicts", "licenses", "base_layout_at", "written"}
     for app in table["apps"]:
         if not isinstance(app, dict):
             bad("an app is not an object")
@@ -169,6 +176,21 @@ def load_table(root=ROOT):
         names = [os.path.basename(p) for p in [PROJECT_LICENSE] + licenses]
         if len(set(names)) != len(names):
             bad("%s: two licence files have the same name" % where)
+        base_at = app.get("base_layout_at", [])
+        if (not isinstance(base_at, list) or len(set(map(str, base_at))) != len(base_at)
+                or not all(isinstance(size, str) and size in sizes for size in base_at)):
+            bad("%s: base_layout_at is not a list of distinct sizes from generated_sizes" % where)
+        if base_at and not app["layouts"]:
+            bad("%s: base_layout_at is for an app with layouts" % where)
+        written = app.get("written", [])
+        if (not isinstance(written, list) or len(set(map(str, written))) != len(written)
+                or not all(isinstance(p, str) and len(p) <= 200 and ABS_FILE.fullmatch(p)
+                           and not re.search(r"/\.\.?(?:/|$)", p) and not _is_under(p, root_dir)
+                           and not _is_known(p) for p in written)):
+            bad("%s: written is not a list of distinct absolute file paths outside %s and the system's folders"
+                % (where, root_dir))
+        if written and not app["layouts"]:
+            bad("%s: written needs the preRemove hook, which only an app with layouts has" % where)
         apps[key] = dict(app, id=pkg_id)
 
     for key, app in apps.items():
@@ -188,8 +210,22 @@ def _no_duplicates(items):
     return obj
 
 
+def _is_under(path, folder):
+    return path == folder or path.startswith(folder + "/")
+
+
+def _is_known(path):
+    return path in KNOWN_PATHS or any(path.startswith(folder) for folder in KNOWN_FOLDERS)
+
+
 def all_sizes(table):
     return [table["base_size"]] + list(table["generated_sizes"])
+
+
+def layout_sizes(table, app):
+    """The sizes the app's package holds a layout for: every size but those in its base_layout_at, where it
+    shows the base layout."""
+    return [size for size in all_sizes(table) if size not in app.get("base_layout_at", [])]
 
 
 def plugin_files(app):
@@ -344,6 +380,8 @@ def check_plugin(table, app, files):
             raise Refused("%s does not hold the path %s, where it would start its worker: the plugin would not "
                           "work from %s/%s/" % (where + lib, wanted.decode(), table["plugins_root"], folder))
 
+    check_paths(table, app, files)
+
     name = where + "%s.manifest" % folder
     tree = parse_xml(name, files["%s.manifest" % folder])
     if tree.tag != "plugin":
@@ -369,6 +407,34 @@ def check_plugin(table, app, files):
     check_description(where + "%s.xml" % folder, files["%s.xml" % folder])
     if app["images"]:
         check_image_zip(where + image_zip(folder), files[image_zip(folder)])
+
+
+def path_strings(data):
+    """The absolute paths a binary holds as whole strings (PATH_STRING), sorted."""
+    return sorted({match.group(0).decode("ascii") for match in PATH_STRING.finditer(data)})
+
+
+def check_paths(table, app, files):
+    """Every absolute path in the library and the workers is one this packaging knows: the system's, one in the
+    plugin's own folder, or one apps.json names under `written`, and each of those is in the library. A removal
+    takes away the package's files and what the preRemove hook removes, so a path the plugin writes to that is
+    named nowhere would stay on the head unit."""
+    folder = app["folder"]
+    own = "%s/%s" % (table["plugins_root"], folder)
+    written = list(app.get("written", []))
+    lib = "lib%s.so" % folder
+    for name in [lib] + list(app["workers"]):
+        for path in path_strings(files[name]):
+            if _is_known(path) or _is_under(path, own) or path in written:
+                continue
+            raise Refused("%s/%s holds the path %s, which this packaging does not know. If the plugin writes "
+                          "there, removing the package would leave the file: after checking what it is, name it "
+                          "under \"written\" for the app %s in %s, and the preRemove hook removes it"
+                          % (folder, name, path, app["key"], TABLE))
+    for path in written:
+        if path.encode("ascii") + b"\0" not in files[lib]:
+            raise Refused("%s names %s as written by the app %s, and %s/%s does not hold that path"
+                          % (TABLE, path, app["key"], folder, lib))
 
 
 # ---- layouts and hooks ----------------------------------------------------------------------------------------
@@ -443,8 +509,13 @@ def read_layouts(root, table, app, files):
 
 
 def stamp_hooks(root, table, app):
-    """{script name: bytes} of the hook templates with @FOLDER@, @BASE_SIZE@ and @SIZES@ filled in."""
-    values = {"@FOLDER@": app["folder"], "@BASE_SIZE@": table["base_size"], "@SIZES@": "|".join(all_sizes(table))}
+    """{script name: bytes} of the hook templates with their placeholders filled in: @FOLDER@, @BASE_SIZE@,
+    @SIZES@ (the sizes the package holds a layout for, as a case pattern), @BASE_AT@ (the sizes of base_layout_at
+    as a case pattern, or one that matches no size) and @WRITTEN@ (the paths of `written`, with spaces between)."""
+    values = {"@FOLDER@": app["folder"], "@BASE_SIZE@": table["base_size"],
+              "@SIZES@": "|".join(layout_sizes(table, app)),
+              "@BASE_AT@": "|".join(app.get("base_layout_at", [])) or "none",
+              "@WRITTEN@": " ".join(app.get("written", []))}
     out = {}
     for _, script in HOOK_TEMPLATES:
         path = "%s/%s.in" % (HOOKS, script)
@@ -494,7 +565,8 @@ def stage(root, table, app, version, files, layouts=None, hooks=None):
     for worker in app["workers"]:
         out["payload/bin/" + worker] = files[worker]
     if app["layouts"]:
-        for size, held in layouts.items():
+        for size in layout_sizes(table, app):
+            held = layouts[size]
             for name, data in held.items():
                 out["%slayouts/%s/%s" % (plugin, size, name)] = data
         for script, data in hooks.items():
@@ -686,7 +758,11 @@ def build(root, table, key, version, out, nbtpkg, seed=None, pub=None, released=
     if app["layouts"]:
         layouts = read_layouts(root, table, app, files)
         hooks = stamp_hooks(root, table, app)
-        log("layouts: %s; hooks: %s" % (", ".join(layouts), ", ".join(sorted(hooks))))
+        log("layouts: %s; hooks: %s" % (", ".join(layout_sizes(table, app)), ", ".join(sorted(hooks))))
+        if app.get("base_layout_at"):
+            log("at %s the app shows the %s layout" % (", ".join(app["base_layout_at"]), table["base_size"]))
+        if app.get("written"):
+            log("preRemove also removes: %s" % ", ".join(app["written"]))
     staged, manifest = stage(root, table, app, version, files, layouts, hooks)
 
     with tempfile.TemporaryDirectory(prefix="nbtpkg-stage-") as work:
@@ -735,10 +811,14 @@ def cmd_list(args, table, root):
     print("%-20s %-38s %-19s %-14s %-24s %-9s %s" % ("key", "id", "name", "folder", "zip", "connector", "notes"))
     for key, app in table["apps"].items():
         notes = ["workers " + ", ".join(app["workers"])]
-        notes.append("layouts %s" % "|".join(all_sizes(table)) if app["layouts"] else
+        notes.append("layouts %s" % "|".join(layout_sizes(table, app)) if app["layouts"] else
                      "%s layout only" % table["base_size"] if app["images"] else "no images")
         if app.get("conflicts"):
             notes.append("conflicts with " + ", ".join(app["conflicts"]))
+        if app.get("base_layout_at"):
+            notes.append("the %s layout at %s" % (table["base_size"], ", ".join(app["base_layout_at"])))
+        if app.get("written"):
+            notes.append("writes " + ", ".join(app["written"]))
         if app.get("licenses"):
             notes.append("also " + ", ".join(app["licenses"]))
         print("%-20s %-38s %-19s %-14s %-24s %-9d %s" % (key, app["id"], app["name"], app["folder"], app["zip"],

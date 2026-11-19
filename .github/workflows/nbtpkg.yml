@@ -52,7 +52,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NBTAPPS_COMMIT: ""          # the NBTApps commit to build with; empty until it is on GitHub
+  NBTAPPS_COMMIT: "07e940707e1df1b29b9ed4a4cbb388faaf3d21d3"   # the NBTApps commit to build with, as nbtapps-packages pins it
   PYTHONDONTWRITEBYTECODE: "1"
 
 jobs:

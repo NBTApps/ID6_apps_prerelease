@@ -256,6 +256,24 @@ class TableTests(FixtureCase):
             (lambda t: t["apps"][0].update(licenses=["source/../x"]), "licenses"),
             (lambda t: t["apps"][0].update(key="Alpha"), "key"),
             (lambda t: t.update(generated_sizes=["1280x480"]), "generated_sizes"),
+            (lambda t: t["apps"][2].update(base_layout_at=["1440x540"]), "base_layout_at"),
+            (lambda t: t["apps"][2].update(base_layout_at=["1280x480"]), "base_layout_at"),
+            (lambda t: t["apps"][2].update(base_layout_at=["800x480", "800x480"]), "base_layout_at"),
+            (lambda t: t["apps"][2].update(base_layout_at="800x480"), "base_layout_at"),
+            (lambda t: t["apps"][0].update(base_layout_at=["800x480"]), "base_layout_at is for an app with layouts"),
+            (lambda t: t["apps"][2].update(written=["relative/file"]), "written"),
+            (lambda t: t["apps"][2].update(written=["/var/x/../y"]), "written"),
+            (lambda t: t["apps"][2].update(written=["/var/a b"]), "written"),
+            (lambda t: t["apps"][2].update(written=["/var/x;rm"]), "written"),
+            (lambda t: t["apps"][2].update(written=["/var/$x"]), "written"),
+            (lambda t: t["apps"][2].update(written=["/var/x*"]), "written"),
+            (lambda t: t["apps"][2].update(written=["/var/x/"]), "written"),
+            (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT + "/Delta/x"]), "written"),
+            (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT]), "written"),
+            (lambda t: t["apps"][2].update(written=["/usr/lib/x.so"]), "written"),
+            (lambda t: t["apps"][2].update(written=["/dev/null"]), "written"),
+            (lambda t: t["apps"][2].update(written=["/var/x", "/var/x"]), "written"),
+            (lambda t: t["apps"][0].update(written=["/var/x"]), "written needs the preRemove hook"),
         ]
         for mutate, needle in cases:
             with self.subTest(needle=needle):
@@ -263,6 +281,19 @@ class TableTests(FixtureCase):
                 mutate(self.fx.table)
                 self.fx.write()
                 self.refused(self.fx.table_now, needle)
+
+    def test_real_table_overrides(self):
+        table = m.load_table(REPO_ROOT)
+        every = ["1280x480", "800x480", "960x480", "1440x540", "1920x720"]
+        self.assertEqual(m.all_sizes(table), every)
+        for key, app in table["apps"].items():
+            with self.subTest(key=key):
+                if key in ("boostdeck", "shiftdeck"):
+                    self.assertEqual(m.layout_sizes(table, app), ["1280x480", "800x480", "960x480", "1920x720"])
+                    self.assertEqual(app["written"], ["/var/opt/hmi/data/ID5/%s.prefs" % app["folder"]])
+                else:
+                    self.assertEqual(m.layout_sizes(table, app), every)
+                    self.assertNotIn("written", app)
 
 
 # ---- checks of the upstream plugin ----------------------------------------------------------------------------
@@ -348,6 +379,48 @@ class PluginTests(FixtureCase):
         lib = self.fx.zips["packages/one.zip"]["Alpha/libAlpha.so"]
         self.change("packages/one.zip", "Alpha/libAlpha.so", lib.replace(b"/alpha-qnx\0", b"/alpha-qnx2\0"))
         self.refused(lambda: self.fx.read("alpha"), "Alpha/alpha-qnx")
+
+    def with_path(self, path, where="Delta/libDelta.so"):
+        data = self.fx.zips["packages/two.zip"][where]
+        self.change("packages/two.zip", where, data + b"\x01" + path + b"\0")
+
+    def test_path_strings(self):
+        data = (b"\0/var/a/b.prefs\0x=/not/whole\0/one\0 /var/c d/e\0\x7f/dev/null\0/usr/lib/x.so\0"
+                b"/var/%s/f\0/unfinished/path")
+        self.assertEqual(m.path_strings(data), ["/dev/null", "/usr/lib/x.so", "/var/%s/f", "/var/a/b.prefs"])
+
+    def test_unknown_path_in_the_library(self):
+        self.with_path(b"/var/opt/hmi/data/ID5/Delta.prefs")
+        self.refused(lambda: self.fx.read("delta"), "Delta/libDelta.so holds the path "
+                     "/var/opt/hmi/data/ID5/Delta.prefs, which this packaging does not know", "\"written\"")
+
+    def test_unknown_path_in_a_worker(self):
+        self.with_path(b"/tmp/delta/state", "Delta/delta-qnx")
+        self.refused(lambda: self.fx.read("delta"), "Delta/delta-qnx holds the path /tmp/delta/state")
+
+    def test_another_plugins_folder_is_unknown(self):
+        self.with_path(PLUGINS_ROOT.encode() + b"/Alpha/x")
+        self.refused(lambda: self.fx.read("delta"), "holds the path %s/Alpha/x" % PLUGINS_ROOT)
+        self.with_path(PLUGINS_ROOT.encode() + b"/DeltaTwo/x")
+        self.refused(lambda: self.fx.read("delta"), "holds the path")
+
+    def test_known_paths(self):
+        for path in (b"/dev/null", b"/usr/lib/ldqnx.so.2", b"/opt/sys/lib/libx.so.4", b"/lib/libc.so.3",
+                     PLUGINS_ROOT.encode() + b"/Delta/", PLUGINS_ROOT.encode() + b"/Delta/gateway-ip.txt"):
+            self.with_path(path)
+            self.with_path(path, "Delta/delta-qnx")
+        self.fx.read("delta")
+
+    def test_written_path(self):
+        self.fx.table["apps"][2]["written"] = ["/var/opt/hmi/data/ID5/Delta.prefs"]
+        self.fx.write()
+        self.refused(lambda: self.fx.read("delta"), "names /var/opt/hmi/data/ID5/Delta.prefs as written by the app "
+                     "delta, and Delta/libDelta.so does not hold that path")
+        self.with_path(b"/var/opt/hmi/data/ID5/Delta.prefs2")
+        self.refused(lambda: self.fx.read("delta"), "holds the path /var/opt/hmi/data/ID5/Delta.prefs2")
+        self.change("packages/two.zip", "Delta/libDelta.so", plugin("Delta", ["delta-qnx"], 303)["Delta/libDelta.so"])
+        self.with_path(b"/var/opt/hmi/data/ID5/Delta.prefs")
+        self.fx.read("delta")
 
     def test_manifest(self):
         good = plugin_manifest("Alpha", 301)
@@ -520,6 +593,33 @@ class LayoutTests(FixtureCase):
             expected += ["payload/Delta/layouts/%s/Delta.xml" % size,
                          "payload/Delta/layouts/%s/Delta_ALL_Images.zip" % size]
         self.assertEqual(sorted(staged), sorted(expected))   # nothing at payload/Delta/Delta.xml: the hook makes it
+
+    def test_base_layout_at_and_written(self):
+        self.fx.table["apps"][2].update(base_layout_at=["1920x720"], written=["/var/a/Delta.prefs", "/var/b/d.x"])
+        lib = self.fx.zips["packages/two.zip"]["Delta/libDelta.so"]
+        self.fx.zips["packages/two.zip"]["Delta/libDelta.so"] = lib + b"\0/var/a/Delta.prefs\0/var/b/d.x\0"
+        self.fx.write()
+        self.fx.add_layouts()   # the layout of every generated size is still there to be read and checked
+        self.fx.add_hooks(select=SELECT_HOOK + "case $size in @BASE_AT@) ;; esac\n",
+                          remove=REMOVE_HOOK + "written=\"@WRITTEN@\"\n")
+        layouts, hooks = self.layouts()
+        self.assertEqual(list(layouts), ["1280x480", "800x480", "1920x720"])
+        self.assertTrue(hooks["select-layout.sh"].decode().endswith(
+            "case \"$size\" in 1280x480|800x480) ;; esac\ncase $size in 1920x720) ;; esac\n"))
+        self.assertTrue(hooks["remove-layout.sh"].decode().endswith("written=\"/var/a/Delta.prefs /var/b/d.x\"\n"))
+        table = self.fx.table_now()
+        staged, _ = m.stage(self.fx.root, table, table["apps"]["delta"], "1.0.0", self.fx.read("delta"),
+                            layouts, hooks)
+        self.assertEqual(sorted(p for p in staged if "/layouts/" in p),
+                         ["payload/Delta/layouts/1280x480/Delta.xml", "payload/Delta/layouts/1280x480/Delta_ALL_Images.zip",
+                          "payload/Delta/layouts/800x480/Delta.xml", "payload/Delta/layouts/800x480/Delta_ALL_Images.zip"])
+
+    def test_no_overrides_stamp_harmless_values(self):
+        self.fx.add_layouts()
+        self.fx.add_hooks(select="case $size in @BASE_AT@) ;; esac\n", remove="written=\"@WRITTEN@\"\n")
+        _, hooks = self.layouts()
+        self.assertEqual(hooks["select-layout.sh"], b"case $size in none) ;; esac\n")
+        self.assertEqual(hooks["remove-layout.sh"], b"written=\"\"\n")
 
     @needs_nbtpkg
     def test_happy_path_builds(self):
