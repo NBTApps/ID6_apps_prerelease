@@ -113,7 +113,7 @@ class CommittedLayoutTests(unittest.TestCase):
 
     def test_the_five_apps(self):
         self.assertEqual([app["folder"] for app in self.apps],
-                         ["BoostDeck", "ShiftDeck", "EngineCodes", "MhdMaps", "Bootmod3Suite"])
+                         ["BoostDeck", "ShiftDeck", "EngineCodes", "MhdMaps", "Bootmod3Suite", "LaunchDeck"])
 
     def test_nothing_else_is_there(self):
         self.assertEqual(sorted(os.listdir(self.path())), sorted(app["folder"] for app in self.apps))

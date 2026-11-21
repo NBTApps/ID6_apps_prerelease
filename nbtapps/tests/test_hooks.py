@@ -183,13 +183,16 @@ def commands(text):
 WRITTEN = {
     "boostdeck": ["/var/opt/hmi/data/ID5/BoostDeck.prefs", "/var/opt/hmi/data/ID5/BoostDeck.signals"],
     "shiftdeck": ["/var/opt/hmi/data/ID5/ShiftDeck.prefs"],
+    "launchdeck": ["/var/opt/hmi/data/ID5/LaunchDeck.prefs", "/var/opt/hmi/data/ID5/LaunchDeck.records",
+                   "/var/opt/hmi/data/ID5/LaunchDeck.60-130", "/var/opt/hmi/data/ID5/LaunchDeck.0-100",
+                   "/var/opt/hmi/data/ID5/LaunchDeck.100-200"],
 }
 
 
 class StaticTests(unittest.TestCase):
     def test_every_layout_app_stamps(self):
         self.assertEqual([app["key"] for app in LAYOUT_APPS],
-                         ["boostdeck", "shiftdeck", "engine-fault-codes", "mhd-suite", "bootmod3-suite"])
+                         ["boostdeck", "shiftdeck", "engine-fault-codes", "mhd-suite", "bootmod3-suite", "launchdeck"])
         for app in LAYOUT_APPS:
             with self.subTest(app=app["key"]):
                 hooks = stamped(app)
@@ -202,7 +205,7 @@ class StaticTests(unittest.TestCase):
                 base_at, written = app.get("base_layout_at", []), app.get("written", [])
                 self.assertIn("        %s)\n" % ("|".join(base_at) or "none"), hooks["select-layout.sh"])
                 self.assertIn('written="%s"\n' % " ".join(written), hooks["remove-layout.sh"])
-                if app["key"] in ("boostdeck", "shiftdeck"):
+                if app["key"] in ("boostdeck", "shiftdeck", "launchdeck"):
                     self.assertEqual(base_at, ["1440x540"])
                     self.assertNotIn("1440x540", m.layout_sizes(TABLE, app))
                     self.assertEqual(written, WRITTEN[app["key"]])

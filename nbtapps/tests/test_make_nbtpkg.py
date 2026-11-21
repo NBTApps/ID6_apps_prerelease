@@ -122,6 +122,9 @@ REMOVE_HOOK = "#!/bin/sh\nrm -f \"$NBT_VAR_PLUGINS_DIR/@FOLDER@/@FOLDER@.xml\"\n
 WRITTEN = {
     "boostdeck": ["/var/opt/hmi/data/ID5/BoostDeck.prefs", "/var/opt/hmi/data/ID5/BoostDeck.signals"],
     "shiftdeck": ["/var/opt/hmi/data/ID5/ShiftDeck.prefs"],
+    "launchdeck": ["/var/opt/hmi/data/ID5/LaunchDeck.prefs", "/var/opt/hmi/data/ID5/LaunchDeck.records",
+                   "/var/opt/hmi/data/ID5/LaunchDeck.60-130", "/var/opt/hmi/data/ID5/LaunchDeck.0-100",
+                   "/var/opt/hmi/data/ID5/LaunchDeck.100-200"],
 }
 
 
@@ -248,7 +251,7 @@ def make_keys(folder):
 class TableTests(FixtureCase):
     def test_real_table_loads(self):
         table = m.load_table(REPO_ROOT)
-        self.assertEqual(len(table["apps"]), 8)
+        self.assertEqual(len(table["apps"]), 9)
         self.assertEqual(table["apps"]["mhd-suite"]["id"], "com.github.nbtapps.mhd-suite")
 
     def test_refusals(self):
@@ -296,7 +299,7 @@ class TableTests(FixtureCase):
         self.assertEqual(m.all_sizes(table), every)
         for key, app in table["apps"].items():
             with self.subTest(key=key):
-                if key in ("boostdeck", "shiftdeck"):
+                if key in ("boostdeck", "shiftdeck", "launchdeck"):
                     self.assertEqual(m.layout_sizes(table, app), ["1280x480", "800x480", "960x480", "1920x720"])
                     self.assertEqual(app["written"], WRITTEN[app["key"]])
                 else:

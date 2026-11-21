@@ -92,6 +92,20 @@
       "connector": 218,
       "images": true,
       "layouts": false
+    },
+    {
+      "key": "launchdeck",
+      "name": "LaunchDeck",
+      "folder": "LaunchDeck",
+      "zip": "packages/launchdeck.zip",
+      "workers": ["shift-deck-qnx"],
+      "connector": 120,
+      "images": true,
+      "layouts": true,
+      "base_layout_at": ["1440x540"],
+      "written": ["/var/opt/hmi/data/ID5/LaunchDeck.prefs", "/var/opt/hmi/data/ID5/LaunchDeck.records",
+                  "/var/opt/hmi/data/ID5/LaunchDeck.60-130", "/var/opt/hmi/data/ID5/LaunchDeck.0-100",
+                  "/var/opt/hmi/data/ID5/LaunchDeck.100-200"]
     }
   ]
 }

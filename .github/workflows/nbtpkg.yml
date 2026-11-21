@@ -34,6 +34,7 @@ on:
           - xdrive-control
           - road-jet
           - beamer
+          - launchdeck
       version:
         description: "The package's version: X.Y.Z, or X.Y.Z-pre.N"
         required: true

@@ -25,10 +25,11 @@ never changed here.
 | `xdrive-control` | xDrive Control | `XDriveControl` | `packages/xdrive.zip` | 112 | none (no images) |
 | `road-jet` | Road Jet | `RoadJet` | `packages/road-jet.zip` | 217 | 1280×480 only |
 | `beamer` | BEAMer | `BEAMer` | `packages/beamer.zip` | 218 | 1280×480 only |
+| `launchdeck` | LaunchDeck | `LaunchDeck` | `packages/launchdeck.zip` | 120 | per screen size, 1280×480 at 1440×540 |
 
 MHD+ Suite and Bootmod3 Suite conflict: a head unit has one or the other. Bootmod3 Suite and xDrive Control also
-carry `source/third-party/idrive7-apps-LICENSE`. `packages/hud-gauges.zip` is not packaged, nor yet
-`packages/launchdeck.zip`, new in upstream v0.7.4.
+carry `source/third-party/idrive7-apps-LICENSE`. `packages/hud-gauges.zip` is not packaged.
+LaunchDeck's worker is called `shift-deck-qnx` and is the same file as ShiftDeck's, a copy in its own folder.
 
 Every package installs one plugin folder into `${var_plugins}/<Folder>/`. On a car that is
 `/var/opt/hmi/data/ID5/Plugins/<Folder>/`. The libraries have that path compiled in to start their worker
@@ -107,9 +108,9 @@ make their own throwaway keys.
 
 ## Layouts and hooks
 
-Five apps (`"layouts": true`) need a layout file per screen resolution. Upstream ships the 1280×480 one only.
+Six apps (`"layouts": true`) need a layout file per screen resolution. Upstream ships the 1280×480 one only.
 The rest come from two parts of this folder: `make_layouts.py` generates the layouts, and the hook scripts pick
-one on the head unit. `build` refuses one of these five apps when a file of either part is missing, and lists
+one on the head unit. `build` refuses one of these six apps when a file of either part is missing, and lists
 what is missing. Road Jet and BEAMer ship their 1280×480 layout only, with no hook. This is the contract both
 parts keep to.
 
@@ -186,6 +187,9 @@ gets, so the right-hand column is cut off; #75 and #77 look like the same fault.
 the same files as the desktop installer's (checked against v0.7.3), so they would be cut off too. The 1280×480
 layout is narrower and fits, with room left over. This has not been seen on a head unit: take the key out once
 upstream's layout fits, or once a 1440×540 car shows that it does.
+
+LaunchDeck has `["1440x540"]` too, with no report of its own: its page reaches as far right as ShiftDeck's
+(x + width up to 1156 at 1280×480, so 1300 at 1440×540).
 
 The layouts of such a size stay committed under `nbtapps/layouts/`, and `make_layouts.py` still makes and checks
 them. `build` leaves them out of the archive and out of `@SIZES@`.
@@ -266,6 +270,11 @@ gasoline and diesel layouts, in `/var/opt/hmi/data/ID5/BoostDeck.signals` (`save
 `source/native/src/plugin.cpp`, through the same `savePersistentBytes`). The settings survive an upgrade and go
 with a removal.
 
+LaunchDeck saves the mode last chosen in `/var/opt/hmi/data/ID5/LaunchDeck.prefs` and the last three results of each mode in
+`LaunchDeck.records` (0–60 mph), `LaunchDeck.60-130`, `LaunchDeck.0-100` and `LaunchDeck.100-200` in the same
+folder (`source/native/src/launch_deck.cpp` and `launch_records.h`, through `savePersistentBytes`). They go with a
+removal too.
+
 Only an app with layouts has the hook, so `written` is refused for the others. Neither `gateway-ip.txt` is
 listed: an owner writes it, the plugin only reads it, and it stays. `written` refuses the shared one.
 
@@ -290,7 +299,7 @@ stable, take the pre-release mark off its GitHub release and open a pull request
 `"channel": "prerelease"` out of its record. A package's first version is added to nbtapps-packages by hand,
 with its listing and `author.pub`; the bot only follows packages that are there.
 
-The bot reads the 30 newest releases. With eight packages in one repo, a package whose newest release has fallen
+The bot reads the 30 newest releases. With nine packages in one repo, a package whose newest release has fallen
 out of those is not followed until it has a new one.
 
 ## Taking in upstream's changes
@@ -327,7 +336,7 @@ needs a new version number.
   0.1.0 of each package has it, the beta agent refuses the package as `agent-too-old`. `nbtpkg.py` looks at the
   three numbers only, so its rule for `${var_plugins}` is met.
 - The generated layouts have not been seen on a head unit, and the hook scripts have not run on one. The
-  1440×540 choice for BoostDeck and ShiftDeck rests on upstream's issue reports alone.
+  1440×540 choice for BoostDeck, ShiftDeck and LaunchDeck rests on upstream's issue reports alone.
 - The connector ids in the catalogue's `hmi-ids.json`, and each package's first pull request in nbtapps-packages.
 - No package checks the head unit's firmware. Upstream's desktop installer accepts the firmware and framework
   pairs in `source/docs/installer-profiles.json` only.
