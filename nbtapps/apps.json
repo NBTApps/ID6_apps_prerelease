@@ -106,6 +106,17 @@
       "written": ["/var/opt/hmi/data/ID5/LaunchDeck.prefs", "/var/opt/hmi/data/ID5/LaunchDeck.records",
                   "/var/opt/hmi/data/ID5/LaunchDeck.60-130", "/var/opt/hmi/data/ID5/LaunchDeck.0-100",
                   "/var/opt/hmi/data/ID5/LaunchDeck.100-200"]
+    },
+    {
+      "key": "hud-gauges",
+      "name": "HUD Gauges",
+      "folder": "HudTest",
+      "zip": "packages/hud-gauges.zip",
+      "workers": ["hud-shape-qnx"],
+      "connector": 107,
+      "images": false,
+      "layouts": false,
+      "licenses": ["nbtapps/licenses/NBT-AAD-LICENSE.md", "nbtapps/licenses/NBT-AAD-NOTICE.txt"]
     }
   ]
 }

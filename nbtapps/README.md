@@ -26,9 +26,13 @@ never changed here.
 | `road-jet` | Road Jet | `RoadJet` | `packages/road-jet.zip` | 217 | 1280×480 only |
 | `beamer` | BEAMer | `BEAMer` | `packages/beamer.zip` | 218 | 1280×480 only |
 | `launchdeck` | LaunchDeck | `LaunchDeck` | `packages/launchdeck.zip` | 120 | per screen size, 1280×480 at 1440×540 |
+| `hud-gauges` | HUD Gauges | `HudTest` | `packages/hud-gauges.zip` | 107 | none (no images) |
 
 MHD+ Suite and Bootmod3 Suite conflict: a head unit has one or the other. Bootmod3 Suite and xDrive Control also
-carry `source/third-party/idrive7-apps-LICENSE`. `packages/hud-gauges.zip` is not packaged.
+carry `source/third-party/idrive7-apps-LICENSE`. HUD Gauges carries NBT-AAD's licence and notice
+(`nbtapps/licenses/`, the `LICENSE.md` and `NOTICE.txt` of `packages/hud-gauges.zip`, which a test keeps equal):
+its worker `hud-shape-qnx` is built with NBT-AAD's HUD terminal and MOST client, under the PolyForm Noncommercial
+License 1.0.0. Its plugin and the rest are under upstream's MIT licence.
 LaunchDeck's worker is called `shift-deck-qnx` and is the same file as ShiftDeck's, a copy in its own folder.
 
 Every package installs one plugin folder into `${var_plugins}/<Folder>/`. On a car that is
@@ -67,8 +71,8 @@ Before it builds, `make_nbtpkg.py build` refuses the app unless:
 - the library and the workers are 32-bit little-endian ARM ELF files (a shared library, and programs);
 - the library holds `/var/opt/hmi/data/ID5/Plugins/<Folder>/<worker>` for each worker;
 - every absolute path the library or a worker holds as a whole string is one this folder knows: `/dev/null`,
-  `/var/opt/hmi/data/ID5/gateway-ip.txt` (see [Notes](#notes)), a path under `/lib/`, `/usr/lib/` or
-  `/opt/sys/lib/`, a path in the plugin's own folder, or a path `apps.json` names under the app's `written`; and the library holds each `written` path. A path upstream adds later stops
+  `/var/opt/hmi/data/ID5/gateway-ip.txt` (see [Notes](#notes)), a path under `/lib/`, `/usr/lib/`, `/opt/sys/lib/`
+  or `/fs/sda0/opt/sys/lib/` (the system partition's, where HUD Gauges' worker loads the MOST library from), a path in the plugin's own folder, or a path `apps.json` names under the app's `written`; and the library holds each `written` path. A path upstream adds later stops
   the build until someone has read what the plugin does with it (see [Files a plugin
   writes](#files-a-plugin-writes)). The check sees a path that is a string of its own in the file. It does not
   see one the program puts together while it runs;
@@ -299,7 +303,7 @@ stable, take the pre-release mark off its GitHub release and open a pull request
 `"channel": "prerelease"` out of its record. A package's first version is added to nbtapps-packages by hand,
 with its listing and `author.pub`; the bot only follows packages that are there.
 
-The bot reads the 30 newest releases. With nine packages in one repo, a package whose newest release has fallen
+The bot reads the 30 newest releases. With ten packages in one repo, a package whose newest release has fallen
 out of those is not followed until it has a new one.
 
 ## Taking in upstream's changes
@@ -326,6 +330,10 @@ needs a new version number.
   plugin folder stays after a remove while one is there. With neither, an app connects to 169.254.21.3, and only
   when that does not answer, sends one HSFZ identification query to 169.254.255.255, UDP port 6811, and uses the
   address that answers as the gateway if exactly one does (`discover_gateway` in `source/native/src/diag_link.c`).
+- HUD Gauges saves whether it is on in `hud-enabled` in its own plugin folder (`source/native/hud/hud_menu.cpp`).
+  It has no hook, so a removal leaves that file, and so the folder, as it leaves an owner's `gateway-ip.txt`. The
+  HMI loads no plugin from the folder without the package's files, and a reinstall writes over none of it: with
+  `hud-enabled` at `1`, the gauges come back on at the next start.
 - A head unit with an app installed by hand in the same folder refuses the package (`stock-mismatch`). The
   owner moves the hand-installed folder out of `Plugins` first.
 

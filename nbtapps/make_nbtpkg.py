@@ -88,7 +88,9 @@ PATH_STRING = re.compile(rb"(?<![\x21-\x7e])/[\x21-\x7e]+/[\x21-\x7e]*(?=\x00)")
 # gateway-ip.txt that an owner may write for every app at once (source/native/src/diagnostic_gateway.h). The plugins
 # only read that one, and no package places or removes it.
 KNOWN_PATHS = ("/dev/null", "/var/opt/hmi/data/ID5/gateway-ip.txt")
-KNOWN_FOLDERS = ("/lib/", "/usr/lib/", "/opt/sys/lib/")
+# The system's libraries are also read from /fs/sda0/opt/sys/lib/, where the system partition is mounted: HUD
+# Gauges' worker loads the MOST library from there.
+KNOWN_FOLDERS = ("/lib/", "/usr/lib/", "/opt/sys/lib/", "/fs/sda0/opt/sys/lib/")
 
 EM_ARM, ET_EXEC, ET_DYN = 40, 2, 3
 

@@ -251,8 +251,15 @@ def make_keys(folder):
 class TableTests(FixtureCase):
     def test_real_table_loads(self):
         table = m.load_table(REPO_ROOT)
-        self.assertEqual(len(table["apps"]), 9)
+        self.assertEqual(len(table["apps"]), 10)
         self.assertEqual(table["apps"]["mhd-suite"]["id"], "com.github.nbtapps.mhd-suite")
+
+    def test_hud_gauges_licences_are_the_zips(self):
+        """The NBT-AAD licence and notice that HUD Gauges carries are the ones in upstream's hud-gauges.zip."""
+        with zipfile.ZipFile(os.path.join(REPO_ROOT, "packages", "hud-gauges.zip")) as z:
+            for ours, theirs in (("NBT-AAD-LICENSE.md", "LICENSE.md"), ("NBT-AAD-NOTICE.txt", "NOTICE.txt")):
+                with open(os.path.join(REPO_ROOT, "nbtapps", "licenses", ours), "rb") as f:
+                    self.assertEqual(f.read(), z.read(theirs), ours)
 
     def test_refusals(self):
         cases = [
@@ -416,7 +423,7 @@ class PluginTests(FixtureCase):
         self.refused(lambda: self.fx.read("delta"), "holds the path")
 
     def test_known_paths(self):
-        for path in (b"/dev/null", b"/usr/lib/ldqnx.so.2", b"/opt/sys/lib/libx.so.4", b"/lib/libc.so.3",
+        for path in (b"/dev/null", b"/usr/lib/ldqnx.so.2", b"/opt/sys/lib/libx.so.4", b"/lib/libc.so.3", b"/fs/sda0/opt/sys/lib/liby.so.8",
                      PLUGINS_ROOT.encode() + b"/Delta/", PLUGINS_ROOT.encode() + b"/Delta/gateway-ip.txt",
                      b"/var/opt/hmi/data/ID5/gateway-ip.txt"):
             self.with_path(path)
@@ -677,7 +684,7 @@ class ArgumentTests(unittest.TestCase):
     def test_app_unknown(self):
         table = m.load_table(REPO_ROOT)
         with self.assertRaises(m.Refused):
-            m.build(REPO_ROOT, table, "hud-gauges", "1.0.0", "/nonexistent", None, log=QUIET)
+            m.build(REPO_ROOT, table, "no-such-app", "1.0.0", "/nonexistent", None, log=QUIET)
 
 
 class RecordTests(unittest.TestCase):

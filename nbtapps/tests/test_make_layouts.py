@@ -238,12 +238,12 @@ class RuleTests(unittest.TestCase):
 
     def test_road_jet_and_beamer_get_no_layouts(self):
         table = m.load_table(REPO_ROOT)
-        for key in ("road-jet", "beamer", "xdrive-control"):
+        for key in ("road-jet", "beamer", "xdrive-control", "hud-gauges"):
             with self.subTest(key=key):
                 with self.assertRaises(m.Refused) as caught:
                     L.layout_apps(table, [key])
                 self.assertIn("has no layout per screen size", str(caught.exception))
-        self.assertRaises(m.Refused, L.layout_apps, table, ["hud-gauges"])
+        self.assertRaises(m.Refused, L.layout_apps, table, ["no-such-app"])
 
 
 # ---- the generator on synthetic input, with Pillow ------------------------------------------------------------
