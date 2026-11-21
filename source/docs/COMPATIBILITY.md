@@ -19,9 +19,9 @@ The installer accepts the exact firmware and framework pairs in [installer-profi
 | NBTevo firmware | Evidence |
 | --- | --- |
 | L17252I | Attached capture matches the audited M17345I pair byte for byte. |
-| M17365I | [#60](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/60) matches the audited M17345I pair. |
+| M17365I | Both hashes in [#60](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/60) match the audited M17345I pair. The owner confirmed installation with v0.7.3 and reported missing telemetry for several gauges. |
 | Q18491I | The attached libraries match R19101I. The rebuilt BoostDeck and ShiftDeck pass the reference ABI comparison. **Tested and working** for BoostDeck in [#76](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/76), which also reports gateway errors in Bootmod3 Suite and BEAMer. |
-| R19144I | The attached report matches the same R19101I pair. **Tested and working** for MHD+ Suite and Engine Fault Codes in [#27](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/27); the same report describes reproducible HMI freezes with BoostDeck and ShiftDeck. The installer accepts this profile. |
+| R19144I | The attached report matches the same R19101I pair. **Tested and working** for MHD+ Suite and Engine Fault Codes in [#27](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/27); the same report describes reproducible HMI freezes with BoostDeck and ShiftDeck. The installer accepts this profile. A separate F87 report with the same hashes passed a 10–15 minute parked check with its ID6 interface. [#89](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/89) |
 | S19322I | [#38](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/38) matches the audited S19221I pair. |
 | T18501I | [#53](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/53) matches the audited R19101I pair. |
 | U19384I | [#4](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/4) matches the audited U19384I pair. |
@@ -30,7 +30,25 @@ The installer accepts the exact firmware and framework pairs in [installer-profi
 | Y22292I | **Tested and working** for BoostDeck and ShiftDeck in [#59](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/59#issuecomment-6967237281). The owner supplied a passing ABI audit. Engine Fault Codes opened, but the displayed code meanings were not confirmed. |
 | Y23236I | **Tested and working** for MHD+ Suite, ShiftDeck, and Engine Fault Codes in [#69](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/69). BoostDeck worked after an initial crash; transmission temperature was missing with the engine running. [#40](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/40) provides the matching hashes. |
 
-K17052I ([#34](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/34)), T23235J ([#37](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/37)), and V20153J ([#25](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/25)) still need a verified framework pair for installer support. T23235J uses a different reported gateway. Run the [read-only capture tool](../tools/capture_headunit.py) to collect the firmware, display and framework evidence.
+### Added in installer v0.7.4
+
+| NBTevo firmware | Evidence |
+| --- | --- |
+| M17345I | Both framework hashes match M17365I and L17252I. |
+| R19101I | Both framework hashes match R19144I, Q18491I and T18501I. |
+| S19221I | Both framework hashes match S19322I. |
+| T23235J | Both framework hashes from the 1280 × 480 Supra in [#37](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/37) exactly match the existing Y23236I profile. [The owner confirmed](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/37#issuecomment-6990226041) that BoostDeck and Engine Fault Codes work after a parked restart with the car's diagnostic gateway configured. Transmission temperature stays blank because its EGS rejects the existing DID [#79](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/79). |
+
+### Firmware reports still needing evidence
+
+| Firmware | Evidence needed |
+| --- | --- |
+| J16383I | The 1280 × 480 request in [#86](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/86) supplies a version and display. Both framework hashes are still needed. |
+| K17052I | [#34](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/34) supplies the screen version. Both framework hashes and the active display size are still needed. |
+| V20153J | [#25](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/25) reports that the ABI resolves. Both exact framework hashes and display size are still needed. V20153I is a different profile. |
+| W202xxI | [#97](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/97) reports a working installation and a BEAMer module issue. The complete firmware code, both framework hashes, and display size are still needed. |
+
+O18184I passed the static ABI comparison and has its own framework hashes. Use the [Trio Compatibility Collector](../tools/trio-collector/Quick%20Start.md) for the version, both framework hashes, and the active display size.
 
 The 320d handoff matches the existing N18032I firmware profile. ShiftDeck RPM and BoostDeck transmission temperature were observed working. Dynamic diesel pressure and intake requests remain unshipped because the draft redefines a shared ECU diagnostic slot and independent validation is incomplete. Firmware compatibility does not determine which engine signals or tuning controls a vehicle supports.
 
@@ -66,4 +84,11 @@ Open points:
 
 ## xDrive Control (experimental)
 
-The Status command reports whether DSC identification timed out, returned a UDS refusal, or identified an unsupported SGBD index. This distinguishes the missing replies in [issue #23](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/23) from an identified 0F2100 in [issue #25](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/25). Mode changes retain the stationary, engine-off Park checks. The write allowlist remains 0F2510 and 0F2850. The immediate AWD restore is limited to 0F2850, as in the [upstream measurements and implementation](https://github.com/cauliflowermossgrape/idrive7-apps/blob/main/apps/live_adjustments/xdrive.js).
+The Status command reports whether DSC identification timed out, returned a UDS refusal, or identified an unsupported SGBD index. This distinguishes the missing replies in [issue #23](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/23) from an identified 0F2100 in [issue #25](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/25). Mode changes retain the stationary Park checks, with the engine off except on 0F1860. The write allowlist is 0F2510, 0F2850, and 0F1860 (F-series DSC_25). For 0F1860, `dsc_25.prg` defines 0xDBE1 as LMV_FUNKTION (1 active, 0 inactive for the current terminal 15 cycle). The worker first verifies the tested LMV 0F1480 transfer case. This LMV rejects 0xDB32 with NRC 31. The readback is the LMV target qualifier in 0x4002 byte 3 (`lmv_01.prg` STATUS_SOLLMOMENT): 0x20 applies the DSC target, 0x28 opens the clutch, 0x70 is rear-wheel drive. With the engine off, DSC_25 reports 0xDBE1 = 0 and the LMV reports 0x60 (fallback), so on 0F1860 the switch requires the engine running, stationary, and Park. The restore button also writes 0xDBE1 = 1 on 0F1860, as `dsc_25.prg` allows; the owner of the test car confirmed that it restores AWD, and an ignition cycle also restores AWD. On a 2018 F-series car, the write took more than 2 s to acknowledge; 0x4002 changed from 0x20 to 0x28, and front-axle actual torque (0x4003) stayed at its zero value up to 52 km/h. The immediate AWD restore is limited to 0F2850, as in the [upstream measurements and implementation](https://github.com/cauliflowermossgrape/idrive7-apps/blob/main/apps/live_adjustments/xdrive.js), and 0F1860.
+
+
+## Reported Bootmod3 and HUD compatibility limits
+
+- Bootmod3 Suite reads the active slot automatically when the map page opens and after each selection, after identifying a supported CustomROM. The ID6 candidate imports newer marker layouts and profile metadata from [iDrive7 Engine Config](https://github.com/cauliflowermossgrape/idrive7-apps/blob/35bca28bc82b30482d73782877ebaf92c69dcb8c/apps/live_adjustments/bm3_protocol.js). For an unsupported dynamic DID, it tries the same fixed marker via a direct diagnostic read. This covers the refusal reported in [issue #95](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/95) in simulation. Whether the S55 accepts the direct read and matches a supported ROM still needs a parked test.
+- An unsupported DSC can report the DSC, LMV, and VIP module indexes via **Refresh status**. Upstream has a distinct [G-series VIP control path](https://github.com/cauliflowermossgrape/idrive7-apps/blob/35bca28bc82b30482d73782877ebaf92c69dcb8c/apps/live_adjustments/README.md#xdrive-experimental). The ID6 candidate keeps its existing DSC and LMV write allowlist.
+- HUD Gauges accepts a verified gateway IPv4 address and distinguishes missing vehicle data from an overlay rejection. The F06 and F16 in [issue #82](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/82) and [issue #36](https://github.com/inotbarnacle/ID6_apps_prerelease/issues/36) reject the reference HUD text handle. Their layouts still need a parked capture of the factory HUD handle setup.

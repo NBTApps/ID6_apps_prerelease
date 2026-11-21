@@ -1,5 +1,15 @@
 # Change notes
 
+- **Engine Fault Codes and MHD+ Suite** wait up to three seconds for another app to release diagnostics. MHD+ sends the requested map command once after acquiring the gateway.
+- **HUD Gauges** polls after a 30 ms gap between reads and checks for redraws every 5 ms.
+- **Desktop installers v0.7.4 beta** add exact framework matches for M17345I, R19101I, S19221I, and T23235J.
+
+- **BoostDeck** has nine configurable gauge positions in the original layout and separate saved gasoline and diesel layouts. New choices include OBD oil temperature, control module voltage, RPM, load, air flow, and fuel rate.
+- **LaunchDeck** adds 0–60 and 60–130 mph plus 0–100 and 100–200 km/h timing with three saved results per mode.
+- **MHD+ Suite** shows the last map and Max Cooling settings acknowledged by the DME.
+- **xDrive Control** incorporates the DSC_25/LMV 0F1480 profile with engine-running, Park, and zero-speed checks.
+- **Diagnostic gateway** lookup supports a shared address and link-local HSFZ discovery. Bootmod3 and HUD Gauges report more specific compatibility failures.
+
 - **Desktop installers v0.7.3 beta** add eleven firmware and framework profiles and manual firmware and display selection when automatic detection cannot read them.
 - **BoostDeck** saves color and units across iDrive restarts. **ShiftDeck** saves units and shift-light RPM.
 

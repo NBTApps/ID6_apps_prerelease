@@ -2,9 +2,16 @@
 
 Connect your parked car to a computer over wired ENET. Open an AI agent with terminal access on that computer and give it this repository and [AgentReadMe.md](AgentReadMe.md). The agent identifies your head unit, checks compatibility, and installs your chosen apps under **My Vehicle**.
 
+
+## Unsupported firmware? Run the Trio Compatibility Collector
+
+If your version is unsupported, enable temporary SSH with Bavarian SSH Client first. Run the [Trio Compatibility Collector](source/tools/trio-collector/Quick%20Start.md) and email the ZIP it creates to [nordicbmwdealer@gmail.com](mailto:nordicbmwdealer@gmail.com) so we can get a fix to you quickly.
+
 ## Desktop installer (beta)
 
-[Download the macOS or Windows installer](https://github.com/inotbarnacle/ID6_apps_prerelease/releases). Follow the [setup, install, and uninstall guide](Installer.md). Temporary SSH must be enabled before opening the installer.
+[Download the macOS or Windows installer](https://github.com/inotbarnacle/ID6_apps_prerelease/releases/tag/installer-v0.7.4). Follow the [setup, install, and uninstall guide](Installer.md). Temporary SSH must be enabled before opening the installer.
+
+[NBTApps](https://github.com/tom-pryor/nbtapps) also distributes these apps through its [community catalogue](https://github.com/tom-pryor/nbtapps-packages). The v0.7.4 release includes the package handoff for the catalogue maintainer. Check your firmware against the [compatibility matrix](source/docs/COMPATIBILITY.md) before installing. HUD Gauges and xDrive Control are experimental.
 
 ## iDrive 6 compatibility
 
@@ -12,7 +19,7 @@ The porting workflow can be used to evaluate any iDrive 6 version. Prebuilt pack
 
 ## Tell your agent what to install
 
-Choose **MHD+ Suite** or **Bootmod3 Suite**. [Download the dashboard package](packages/dashboard.zip). Also say **yes or no to **xDrive Control (experimental)**** and **yes or no to HUD Gauges**. Bootmod3 Suite is in beta.
+Choose **MHD+ Suite** or **Bootmod3 Suite**. [Download the dashboard package](packages/dashboard.zip). Also say whether to install **xDrive Control** and **HUD Gauges**. Both are experimental. Bootmod3 Suite is in beta.
 
 > My car is parked, iDrive is awake, and this computer is connected over wired ENET. Follow the AgentReadMe to install BoostDeck, ShiftDeck, and Engine Fault Codes. My tuning menu choice is **[MHD+ Suite / Bootmod3 Suite]**. My xDrive Control (experimental) choice is **[yes / no]**. My HUD Gauges choice is **[yes / no]**. Verify firmware, framework hashes, and display resolution before uploading. Ask me when temporary SSH or a parked restart is needed.
 
@@ -20,11 +27,12 @@ Choose **MHD+ Suite** or **Bootmod3 Suite**. [Download the dashboard package](pa
 
 ## Features
 
-- **BoostDeck** has faster gauge updates and a new bar layout. It displays boost, AFR, ignition timing, intake air temperature, transmission temperature, rail pressure, oil pressure, coolant temperature, and Active Ethanol. Press **OPTIONS** for gauge colors, including Multicolor, and to switch between PSI and Fahrenheit or bar and Celsius.
+- **BoostDeck** keeps the original eight main gauges and the right-hand Active Ethanol position. Each position is configurable. Open **OPTIONS → Configure gauges**, select **Gauge 1** through **Gauge 9**, and choose a reading such as oil temperature, voltage, RPM, boost, or fuel rail pressure. Open **OPTIONS → Engine profile** for the diesel OBD profile. Gasoline and diesel keep separate gauge layouts. Layouts, the selected engine profile, colors, and units are saved for the next iDrive start.
+- **LaunchDeck** times 0–60 and 60–130 mph or 0–100 and 100–200 km/h. The menu shows a green **Ready** check, **Measuring** during a run, and the last three results for each mode. Display resolution is 0.01 s, with measurement precision limited by OBD speed sampling. [LaunchDeck package](packages/launchdeck.zip)
 - **ShiftDeck** displays live speed, an RPM bar, and shift lights with a selectable RPM threshold. Press **OPTIONS** to switch between mph and km/h. This update includes performance improvements.
-- **MHD+ Suite** offers four map slots and puts **Exhaust Flap** and **Max Cooling** under **Options**.
+- **MHD+ Suite** offers four map slots and puts **Exhaust Flap** and **Max Cooling** under **Options**. The main screen shows the last map and Max Cooling settings accepted by the DME during the current app session.
 - **Bootmod3 Suite** is a new beta control menu for compatible CustomROM tunes. It offers four map slots, exhaust flap control, Active Sound, and burble presets.
-- **xDrive Control (experimental)** temporarily selects rear-wheel drive on supported DSC versions. **The engine must be off before switching from AWD to RWD or from RWD to AWD.**
+- **xDrive Control (experimental)** temporarily selects rear-wheel drive on supported DSC versions. Mode changes require confirmed Park and zero speed. The F-series DSC_25 (0F1860) with LMV 0F1480 requires the engine running. The supported G-series DSCs require the engine off. See the [compatibility notes](source/docs/COMPATIBILITY.md#xdrive-control-experimental).
 - **Engine Fault Codes** reads engine/DME fault codes and shows descriptions when available. It can read codes even when the DME refuses to clear them.
 - **Road Jet**. A simple game that makes a jet move based on throttle input and steering angle. [Road Jet package](packages/road-jet.zip)
 - **BEAMer** offers Front, Rear, Both, and Insane lighting patterns in Park at zero speed. Tested on an F3x car. Other Fxx cars may work if they have the supported lighting module. Gxx has not been tested. [BEAMer package](packages/beamer.zip)

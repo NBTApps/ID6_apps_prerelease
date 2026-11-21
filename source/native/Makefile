@@ -3,14 +3,14 @@ PYTHON ?= python3
 CFLAGS ?= -O2 -std=c99 -Wall -Wextra -Werror
 CORE = src/gauge_core.c
 CORE_LINK = $(CORE) src/diag_link.c
-HEADERS = src/gauge_core.h src/drive_frame.h src/diagnostic_lease.h src/diag_link.h
+HEADERS = src/gauge_core.h src/boost_signals.def src/drive_frame.h src/diagnostic_lease.h src/diag_link.h
 # Every host worker carries the HSFZ-then-MOST link, with a fake DSI selected by ID6_FAKE_MOST.
 MOST = src/most/most_link.c src/most/dsi_client.c src/most/most_proto.c src/most/dsi_bind.c
 MOST_HEADERS = src/most/most_link.h src/most/dsi_client.h src/most/most_proto.h src/most/dsi_abi.h
 FAKE_DSI = tests/fake_dsi.c tests/fake_dme.c tests/fake_dsi.h tests/fake_dme.h
 WORKER = src/collector.c $(CORE_LINK) $(MOST) tests/fake_most_env.c $(FAKE_DSI) $(HEADERS) $(MOST_HEADERS)
 HOST_LINK = $(CC) $(CFLAGS) -pthread -DMOST_HOST -Isrc -Itests
-.PHONY: assets test
+.PHONY: assets launch-assets test
 
 assets:
 	$(PYTHON) tools/make_bars.py
@@ -34,6 +34,9 @@ build/engine-codes: $(WORKER) | build
 build/bootmod3: $(WORKER) src/controls.c src/bm3_profiles.h | build
 	$(HOST_LINK) -DBM3_ONLY $(filter-out src/controls.c,$(filter %.c,$^)) -lm -o $@
 
+build/xdrive-control: $(WORKER) src/controls.c | build
+	$(HOST_LINK) -DXDRIVE_ONLY $(filter-out src/controls.c,$(filter %.c,$^)) -lm -o $@
+
 build/exhaust-flap: $(WORKER) | build
 	$(HOST_LINK) -DEXHAUST_FLAP_ONLY $(filter %.c,$^) -lm -o $@
 
@@ -46,7 +49,21 @@ build/test-most: tests/test_most.c $(MOST) $(FAKE_DSI) $(MOST_HEADERS) | build
 build/test-diag-link: tests/test_diag_link.c $(CORE_LINK) $(MOST) tests/fake_most_env.c $(FAKE_DSI) $(HEADERS) $(MOST_HEADERS) | build
 	$(HOST_LINK) $(filter %.c,$^) -lm -o $@
 
-test: build/boostdeck-collector build/shift-deck build/mhd-maps build/engine-codes build/test-core build/test-most build/test-diag-link build/bootmod3 build/exhaust-flap
+build/test-launch-timer: tests/test_launch_timer.c src/launch_timer.c src/launch_timer.h | build
+	$(CC) $(CFLAGS) -Isrc $(filter %.c,$^) -o $@
+
+build/launch_timer.o: src/launch_timer.c src/launch_timer.h | build
+	$(CC) $(CFLAGS) -Isrc -c $< -o $@
+
+build/test-launch-records: tests/test_launch_records.cpp build/launch_timer.o src/launch_records.h | build
+	$(CXX) -O2 -std=gnu++98 -Wall -Wextra -Werror -Isrc $(filter %.cpp %.o,$^) -o $@
+
+launch-assets:
+	$(PYTHON) tools/launch_art.py
+
+test: build/xdrive-control build/boostdeck-collector build/shift-deck build/mhd-maps build/engine-codes build/test-core build/test-most build/test-diag-link build/bootmod3 build/exhaust-flap build/test-launch-timer build/test-launch-records
+	./build/test-launch-timer
+	./build/test-launch-records
 	./build/test-core
 	./build/test-most
 	./build/test-diag-link
