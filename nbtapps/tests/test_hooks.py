@@ -179,6 +179,13 @@ def commands(text):
     return found, functions
 
 
+# What the real table says each app writes outside its folder (see nbtapps/README.md).
+WRITTEN = {
+    "boostdeck": ["/var/opt/hmi/data/ID5/BoostDeck.prefs", "/var/opt/hmi/data/ID5/BoostDeck.signals"],
+    "shiftdeck": ["/var/opt/hmi/data/ID5/ShiftDeck.prefs"],
+}
+
+
 class StaticTests(unittest.TestCase):
     def test_every_layout_app_stamps(self):
         self.assertEqual([app["key"] for app in LAYOUT_APPS],
@@ -198,7 +205,7 @@ class StaticTests(unittest.TestCase):
                 if app["key"] in ("boostdeck", "shiftdeck"):
                     self.assertEqual(base_at, ["1440x540"])
                     self.assertNotIn("1440x540", m.layout_sizes(TABLE, app))
-                    self.assertEqual(written, ["/var/opt/hmi/data/ID5/%s.prefs" % app["folder"]])
+                    self.assertEqual(written, WRITTEN[app["key"]])
                 else:
                     self.assertEqual((base_at, written), ([], []))
 

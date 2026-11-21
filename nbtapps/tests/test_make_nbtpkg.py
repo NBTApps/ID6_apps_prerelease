@@ -118,6 +118,13 @@ SELECT_HOOK = "#!/bin/sh\n# picks a layout of @FOLDER@ (default @BASE_SIZE@)\nca
 REMOVE_HOOK = "#!/bin/sh\nrm -f \"$NBT_VAR_PLUGINS_DIR/@FOLDER@/@FOLDER@.xml\"\n"
 
 
+# What the real table says each app writes outside its folder (see nbtapps/README.md).
+WRITTEN = {
+    "boostdeck": ["/var/opt/hmi/data/ID5/BoostDeck.prefs", "/var/opt/hmi/data/ID5/BoostDeck.signals"],
+    "shiftdeck": ["/var/opt/hmi/data/ID5/ShiftDeck.prefs"],
+}
+
+
 class Fixture:
     """A working tree in a temporary folder with apps.json, two upstream zips and the licence files."""
 
@@ -272,6 +279,7 @@ class TableTests(FixtureCase):
             (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT]), "written"),
             (lambda t: t["apps"][2].update(written=["/usr/lib/x.so"]), "written"),
             (lambda t: t["apps"][2].update(written=["/dev/null"]), "written"),
+            (lambda t: t["apps"][2].update(written=["/var/opt/hmi/data/ID5/gateway-ip.txt"]), "written"),
             (lambda t: t["apps"][2].update(written=["/var/x", "/var/x"]), "written"),
             (lambda t: t["apps"][0].update(written=["/var/x"]), "written needs the preRemove hook"),
         ]
@@ -290,7 +298,7 @@ class TableTests(FixtureCase):
             with self.subTest(key=key):
                 if key in ("boostdeck", "shiftdeck"):
                     self.assertEqual(m.layout_sizes(table, app), ["1280x480", "800x480", "960x480", "1920x720"])
-                    self.assertEqual(app["written"], ["/var/opt/hmi/data/ID5/%s.prefs" % app["folder"]])
+                    self.assertEqual(app["written"], WRITTEN[app["key"]])
                 else:
                     self.assertEqual(m.layout_sizes(table, app), every)
                     self.assertNotIn("written", app)
@@ -406,7 +414,8 @@ class PluginTests(FixtureCase):
 
     def test_known_paths(self):
         for path in (b"/dev/null", b"/usr/lib/ldqnx.so.2", b"/opt/sys/lib/libx.so.4", b"/lib/libc.so.3",
-                     PLUGINS_ROOT.encode() + b"/Delta/", PLUGINS_ROOT.encode() + b"/Delta/gateway-ip.txt"):
+                     PLUGINS_ROOT.encode() + b"/Delta/", PLUGINS_ROOT.encode() + b"/Delta/gateway-ip.txt",
+                     b"/var/opt/hmi/data/ID5/gateway-ip.txt"):
             self.with_path(path)
             self.with_path(path, "Delta/delta-qnx")
         self.fx.read("delta")

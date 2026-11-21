@@ -15,7 +15,7 @@
       "images": true,
       "layouts": true,
       "base_layout_at": ["1440x540"],
-      "written": ["/var/opt/hmi/data/ID5/BoostDeck.prefs"]
+      "written": ["/var/opt/hmi/data/ID5/BoostDeck.prefs", "/var/opt/hmi/data/ID5/BoostDeck.signals"]
     },
     {
       "key": "shiftdeck",

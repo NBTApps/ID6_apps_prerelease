@@ -84,8 +84,10 @@ ABS_FILE = re.compile(r"(?:/[A-Za-z0-9._-]+)+")   # a `written` path; it goes in
 # An absolute path as a whole string of a binary: after a byte that is no printable character, up to a NUL, with a
 # second slash in it. Paths a program builds at run time, or keeps inside a longer string, are not seen.
 PATH_STRING = re.compile(rb"(?<![\x21-\x7e])/[\x21-\x7e]+/[\x21-\x7e]*(?=\x00)")
-# Where a plugin's files may name paths without a word here: the null device and the system's libraries.
-KNOWN_PATHS = ("/dev/null",)
+# Where a plugin's files may name paths without a word here: the null device, the system's libraries, and the
+# gateway-ip.txt that an owner may write for every app at once (source/native/src/diagnostic_gateway.h). The plugins
+# only read that one, and no package places or removes it.
+KNOWN_PATHS = ("/dev/null", "/var/opt/hmi/data/ID5/gateway-ip.txt")
 KNOWN_FOLDERS = ("/lib/", "/usr/lib/", "/opt/sys/lib/")
 
 EM_ARM, ET_EXEC, ET_DYN = 40, 2, 3

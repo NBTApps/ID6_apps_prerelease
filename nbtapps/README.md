@@ -27,7 +27,8 @@ never changed here.
 | `beamer` | BEAMer | `BEAMer` | `packages/beamer.zip` | 218 | 1280×480 only |
 
 MHD+ Suite and Bootmod3 Suite conflict: a head unit has one or the other. Bootmod3 Suite and xDrive Control also
-carry `source/third-party/idrive7-apps-LICENSE`. `packages/hud-gauges.zip` is not packaged.
+carry `source/third-party/idrive7-apps-LICENSE`. `packages/hud-gauges.zip` is not packaged, nor yet
+`packages/launchdeck.zip`, new in upstream v0.7.4.
 
 Every package installs one plugin folder into `${var_plugins}/<Folder>/`. On a car that is
 `/var/opt/hmi/data/ID5/Plugins/<Folder>/`. The libraries have that path compiled in to start their worker
@@ -64,9 +65,9 @@ Before it builds, `make_nbtpkg.py build` refuses the app unless:
   updated for it;
 - the library and the workers are 32-bit little-endian ARM ELF files (a shared library, and programs);
 - the library holds `/var/opt/hmi/data/ID5/Plugins/<Folder>/<worker>` for each worker;
-- every absolute path the library or a worker holds as a whole string is one this folder knows: `/dev/null`, a
-  path under `/lib/`, `/usr/lib/` or `/opt/sys/lib/`, a path in the plugin's own folder, or a path `apps.json`
-  names under the app's `written`; and the library holds each `written` path. A path upstream adds later stops
+- every absolute path the library or a worker holds as a whole string is one this folder knows: `/dev/null`,
+  `/var/opt/hmi/data/ID5/gateway-ip.txt` (see [Notes](#notes)), a path under `/lib/`, `/usr/lib/` or
+  `/opt/sys/lib/`, a path in the plugin's own folder, or a path `apps.json` names under the app's `written`; and the library holds each `written` path. A path upstream adds later stops
   the build until someone has read what the plugin does with it (see [Files a plugin
   writes](#files-a-plugin-writes)). The check sees a path that is a string of its own in the file. It does not
   see one the program puts together while it runs;
@@ -260,10 +261,13 @@ removes a folder. Should the agent ever run it for an upgrade (`NBT_ACTION=upgra
 
 BoostDeck and ShiftDeck save their colour, units and shift-light settings in
 `/var/opt/hmi/data/ID5/BoostDeck.prefs` and `/var/opt/hmi/data/ID5/ShiftDeck.prefs` (four bytes each, see
-`source/native/src/gauge_preferences.h`). The settings survive an upgrade and go with a removal.
+`source/native/src/gauge_preferences.h`). BoostDeck also saves which reading each gauge position shows, for its
+gasoline and diesel layouts, in `/var/opt/hmi/data/ID5/BoostDeck.signals` (`saveAssignments` in
+`source/native/src/plugin.cpp`, through the same `savePersistentBytes`). The settings survive an upgrade and go
+with a removal.
 
-Only an app with layouts has the hook, so `written` is refused for the others. `gateway-ip.txt` is not listed:
-an owner writes it, the plugin only reads it, and it stays.
+Only an app with layouts has the hook, so `written` is refused for the others. Neither `gateway-ip.txt` is
+listed: an owner writes it, the plugin only reads it, and it stays. `written` refuses the shared one.
 
 ## Making a release
 
@@ -307,9 +311,12 @@ needs a new version number.
 
 ## Notes
 
-- Seven of the libraries also read an optional `gateway-ip.txt` in their plugin folder, which an owner writes for
-  a different diagnostic gateway. No package holds one. The agent leaves such a file alone, and the plugin folder
-  stays after a remove while it is there.
+- Every library reads an optional `gateway-ip.txt`, which an owner writes for a different diagnostic gateway:
+  first `/var/opt/hmi/data/ID5/gateway-ip.txt`, for every app at once, then one in its own plugin folder
+  (`source/native/src/diagnostic_gateway.h`). No package holds either. The agent leaves such a file alone, and the
+  plugin folder stays after a remove while one is there. With neither, an app connects to 169.254.21.3, and only
+  when that does not answer, sends one HSFZ identification query to 169.254.255.255, UDP port 6811, and uses the
+  address that answers as the gateway if exactly one does (`discover_gateway` in `source/native/src/diag_link.c`).
 - A head unit with an app installed by hand in the same folder refuses the package (`stock-mismatch`). The
   owner moves the hand-installed folder out of `Plugins` first.
 
