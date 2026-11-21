@@ -116,7 +116,8 @@
       "connector": 107,
       "images": false,
       "layouts": false,
-      "licenses": ["nbtapps/licenses/NBT-AAD-LICENSE.md", "nbtapps/licenses/NBT-AAD-NOTICE.txt"]
+      "licenses": ["nbtapps/licenses/NBT-AAD-LICENSE.md", "nbtapps/licenses/NBT-AAD-NOTICE.txt"],
+      "written": ["/var/opt/hmi/data/ID5/Plugins/HudTest/hud-enabled"]
     }
   ]
 }

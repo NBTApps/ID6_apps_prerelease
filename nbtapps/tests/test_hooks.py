@@ -38,6 +38,7 @@ XML, ZIP = "%s.xml" % FOLDER, "%s_ALL_Images.zip" % FOLDER
 BASE = TABLE["base_size"]
 SIZES = m.all_sizes(TABLE)
 LAYOUT_APPS = [app for app in TABLE["apps"].values() if app["layouts"]]
+SAVING_APP = TABLE["apps"]["hud-gauges"]   # an app without layouts that saves a file in its own folder
 
 # What the scripts may call. The tools are the ones a probe found on a head unit that the brief allows; the rest
 # are builtins of the head unit's ksh (pdksh) that sh has too.
@@ -183,6 +184,7 @@ def commands(text):
 WRITTEN = {
     "boostdeck": ["/var/opt/hmi/data/ID5/BoostDeck.prefs", "/var/opt/hmi/data/ID5/BoostDeck.signals"],
     "shiftdeck": ["/var/opt/hmi/data/ID5/ShiftDeck.prefs"],
+    "hud-gauges": ["/var/opt/hmi/data/ID5/Plugins/HudTest/hud-enabled"],
     "launchdeck": ["/var/opt/hmi/data/ID5/LaunchDeck.prefs", "/var/opt/hmi/data/ID5/LaunchDeck.records",
                    "/var/opt/hmi/data/ID5/LaunchDeck.60-130", "/var/opt/hmi/data/ID5/LaunchDeck.0-100",
                    "/var/opt/hmi/data/ID5/LaunchDeck.100-200"],
@@ -242,6 +244,34 @@ class StaticTests(unittest.TestCase):
             for pattern, what in CONSTRUCTS:
                 with self.subTest(script=name, construct=what):
                     self.assertIsNone(re.search(pattern, code), "%s uses %s" % (name, what))
+
+    def test_only_hud_gauges_saves_without_layouts(self):
+        self.assertEqual([app["key"] for app in TABLE["apps"].values() if not app["layouts"] and app.get("written")],
+                         ["hud-gauges"])
+        for app in TABLE["apps"].values():
+            with self.subTest(app=app["key"]):
+                self.assertEqual(sorted(stamped(app)), ["remove-layout.sh", "select-layout.sh"] if app["layouts"]
+                                 else ["remove-saved.sh"] if app.get("written") else [])
+
+    def test_remove_saved_stamps(self):
+        hooks = stamped(SAVING_APP)
+        text = hooks["remove-saved.sh"]
+        self.assertEqual(m.PLACEHOLDER.findall(text), [])
+        self.assertIn("folder=HudTest\n", text)
+        self.assertIn('written="%s"\n' % " ".join(WRITTEN["hud-gauges"]), text)
+        self.assertEqual(SAVING_APP["written"], WRITTEN["hud-gauges"])
+        work = tempfile.mkdtemp(prefix="hooks-syntax-")
+        self.addCleanup(shutil.rmtree, work, True)
+        path = os.path.join(work, "remove-saved.sh")
+        write(path, text)
+        result = subprocess.run(SHELL + ["-n", path], capture_output=True, text=True, timeout=30)
+        self.assertEqual((result.returncode, result.stderr), (0, ""))
+        found, functions = commands(text)
+        self.assertEqual((sorted(set(found)), functions), (["[", "echo", "exit", "rm"], set()))
+        code = "\n".join(_strip_quotes(line) for line in text.split("\n"))
+        for pattern, what in CONSTRUCTS:
+            with self.subTest(construct=what):
+                self.assertIsNone(re.search(pattern, code), "remove-saved.sh uses %s" % what)
 
     def test_the_scanner(self):
         """The scanner finds what it is there to find."""
@@ -779,6 +809,79 @@ class RemoveTests(HookCase):
             os.chmod(self.dir, 0o755)
         self.assertEqual(result.returncode, 1, result.text)
         self.assertIn("could not remove %s" % os.path.join(self.dir, XML), result.text)
+
+
+class RemoveSavedTests(HookCase):
+    """remove-saved.sh, stamped for HUD Gauges with its saved file in a plugin folder of the test's own."""
+
+    def setUp(self):
+        super().setUp()
+        self.hud = os.path.join(self.vp, SAVING_APP["folder"])
+        self.saved = os.path.join(self.hud, "hud-enabled")
+        for name in ("libHudTest.so", "HudTest.manifest", "HudTest.xml", "hud-shape-qnx"):
+            write(os.path.join(self.hud, name), name)
+        write(os.path.join(self.hud, "gateway-ip.txt"), "169.254.21.3\n")
+        self.use(dict(SAVING_APP, written=[self.saved]))
+
+    def remove(self, action="remove", **kwargs):
+        result = self.run_hook("remove-saved.sh", action, **kwargs)
+        self.assert_no_lacking_tool()
+        self.assertNotIn("not found", result.text)
+        return result
+
+    def others(self):
+        return sorted(n for n in os.listdir(self.hud) if not n.startswith("hud-enabled"))
+
+    def test_removes_what_the_app_saved(self):
+        temporary = self.saved + ".Ab3x_9"
+        kept = [self.saved + ".bak", self.saved + ".1234567", self.saved + "2"]
+        for path in [self.saved, temporary] + kept:
+            write(path, "1\n")
+        result = self.remove()
+        self.assertEqual((result.returncode, result.text),
+                         (0, "HudTest: removed what the app saved: %s %s\n" % (self.saved, temporary)))
+        self.assertEqual([p for p in (self.saved, temporary) if os.path.exists(p)], [])
+        self.assertEqual([p for p in kept if not os.path.isfile(p)], [])
+        self.assertEqual(self.others(), ["HudTest.manifest", "HudTest.xml", "gateway-ip.txt", "hud-shape-qnx",
+                                         "libHudTest.so"])
+
+    def test_nothing_saved(self):
+        result = self.remove()
+        self.assertEqual((result.returncode, result.text), (0, ""))
+        shutil.rmtree(self.hud)
+        result = self.remove()
+        self.assertEqual((result.returncode, result.text), (0, ""))
+
+    def test_kept_on_an_upgrade(self):
+        write(self.saved, "1\n")
+        write(self.saved + ".Ab3x_9", "1\n")
+        result = self.remove("upgrade")
+        self.assertEqual((result.returncode, result.text), (0, ""))
+        self.assertTrue(os.path.isfile(self.saved) and os.path.isfile(self.saved + ".Ab3x_9"))
+
+    def test_without_the_plugins_dir(self):
+        write(self.saved, "1\n")
+        result = self.remove(plugins_dir=None)
+        self.assertEqual(result.returncode, 0, result.text)
+        self.assertFalse(os.path.exists(self.saved))
+
+    def test_a_folder_at_the_saved_path_is_left(self):
+        os.makedirs(os.path.join(self.saved, "inside"))
+        result = self.remove()
+        self.assertEqual((result.returncode, result.text), (0, ""))
+        self.assertTrue(os.path.isdir(os.path.join(self.saved, "inside")))
+
+    @unittest.skipIf(os.geteuid() == 0, "root writes into a read-only folder")
+    def test_cannot_remove(self):
+        write(self.saved, "1\n")
+        os.chmod(self.hud, 0o555)
+        try:
+            result = self.remove()
+        finally:
+            os.chmod(self.hud, 0o755)
+        self.assertEqual(result.returncode, 1, result.text)
+        self.assertIn("HudTest: could not remove %s" % self.saved, result.text)
+        self.assertTrue(os.path.isfile(self.saved))
 
 
 if __name__ == "__main__":

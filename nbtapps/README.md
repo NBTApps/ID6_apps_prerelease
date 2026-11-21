@@ -52,6 +52,7 @@ payload/<Folder>/layouts/<WxH>/...       (apps with layouts: each size the app h
 payload/bin/<worker>                     -> ${var_plugins}/<Folder>/<worker>    mode 0755, each worker
 hooks/select-layout.sh                   postInstall, 30 s (apps with layouts)
 hooks/remove-layout.sh                   preRemove, 30 s (apps with layouts)
+hooks/remove-saved.sh                    preRemove, 30 s (apps without layouts that save files, see below)
 licenses/LICENSE                         source/LICENSE, not installed
 licenses/<name>                          any other licence apps.json names, not installed
 ```
@@ -262,10 +263,16 @@ removes them.
 ### Files a plugin writes
 
 A plugin may write files while it runs. The agent removes what a package placed and nothing else, so such a file
-would stay on the head unit after the package is gone. An app's `written` in `apps.json` lists the files its
-plugin writes outside its own folder, by their full paths, and `remove-layout.sh` removes them when the package
-is removed, with the temporary files the plugin makes beside them (`<file>.XXXXXX`, six characters). It never
-removes a folder. Should the agent ever run it for an upgrade (`NBT_ACTION=upgrade`), it leaves them.
+would stay on the head unit after the package is gone, and one in the plugin folder would keep the folder there
+too. An app's `written` in `apps.json` lists the files its plugin writes, by their full paths: outside the plugin
+folders, or straight in its own plugin folder, where a name the package or its hooks place, a worker's,
+`layouts`, `gateway-ip.txt` and `.select-layout.*` are refused. The app's `preRemove` hook removes them when the
+package is removed, with the temporary files the plugin makes beside them (`<file>.XXXXXX`, six characters): for
+an app with layouts that is `remove-layout.sh`, and for an app without layouts `remove-saved.sh`, made from
+`nbtapps/hooks/remove-saved.sh.in` with `@FOLDER@` and `@WRITTEN@` filled in, which does nothing else. An app
+without layouts and without `written` has no hook. The hooks never remove a folder, and should the agent ever run
+one for an upgrade (`NBT_ACTION=upgrade`), they leave the files. `tests/test_hooks.py` runs `remove-saved.sh` as
+it does the others.
 
 BoostDeck and ShiftDeck save their colour, units and shift-light settings in
 `/var/opt/hmi/data/ID5/BoostDeck.prefs` and `/var/opt/hmi/data/ID5/ShiftDeck.prefs` (four bytes each, see
@@ -279,8 +286,13 @@ LaunchDeck saves the mode last chosen in `/var/opt/hmi/data/ID5/LaunchDeck.prefs
 folder (`source/native/src/launch_deck.cpp` and `launch_records.h`, through `savePersistentBytes`). They go with a
 removal too.
 
-Only an app with layouts has the hook, so `written` is refused for the others. Neither `gateway-ip.txt` is
-listed: an owner writes it, the plugin only reads it, and it stays. `written` refuses the shared one.
+HUD Gauges saves whether it is on, as `1` or `0` and a new line, in `hud-enabled` in its own plugin folder
+(`/var/opt/hmi/data/ID5/Plugins/HudTest/hud-enabled`, `saveEnabled` in `source/native/hud/hud_menu.cpp`, through
+`hud-enabled.XXXXXX` and a rename). Its `remove-saved.sh` removes it, so the folder goes with the package; an
+upgrade keeps it, and the gauges come back on at the next start if they were on.
+
+Neither `gateway-ip.txt` is listed: an owner writes it, the plugin only reads it, and it stays. `written` refuses
+both.
 
 ## Making a release
 
@@ -330,10 +342,6 @@ needs a new version number.
   plugin folder stays after a remove while one is there. With neither, an app connects to 169.254.21.3, and only
   when that does not answer, sends one HSFZ identification query to 169.254.255.255, UDP port 6811, and uses the
   address that answers as the gateway if exactly one does (`discover_gateway` in `source/native/src/diag_link.c`).
-- HUD Gauges saves whether it is on in `hud-enabled` in its own plugin folder (`source/native/hud/hud_menu.cpp`).
-  It has no hook, so a removal leaves that file, and so the folder, as it leaves an owner's `gateway-ip.txt`. The
-  HMI loads no plugin from the folder without the package's files, and a reinstall writes over none of it: with
-  `hud-enabled` at `1`, the gauges come back on at the next start.
 - A head unit with an app installed by hand in the same folder refuses the package (`stock-mismatch`). The
   owner moves the hand-installed folder out of `Plugins` first.
 

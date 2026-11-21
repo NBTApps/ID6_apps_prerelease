@@ -58,6 +58,8 @@ DEFAULT_REPO = "NBTApps/ID6_apps_prerelease"
 RECORD = "nbtpkg-record.json"
 HOOK_TIMEOUT = 30
 HOOK_TEMPLATES = (("postInstall", "select-layout.sh"), ("preRemove", "remove-layout.sh"))
+# The hook of an app without layouts that saves files (`written`): it removes those, and nothing else.
+SAVED_HOOK_TEMPLATES = (("preRemove", "remove-saved.sh"),)
 SUMS = "SHA256SUMS"
 MAX_MEMBER = 64 << 20                        # no plugin file comes near this
 
@@ -187,14 +189,15 @@ def load_table(root=ROOT):
         if base_at and not app["layouts"]:
             bad("%s: base_layout_at is for an app with layouts" % where)
         written = app.get("written", [])
+        own = "%s/%s" % (root_dir, app["folder"])
+        placed = _placed_names(app)
         if (not isinstance(written, list) or len(set(map(str, written))) != len(written)
                 or not all(isinstance(p, str) and len(p) <= 200 and ABS_FILE.fullmatch(p)
-                           and not re.search(r"/\.\.?(?:/|$)", p) and not _is_under(p, root_dir)
-                           and not _is_known(p) for p in written)):
-            bad("%s: written is not a list of distinct absolute file paths outside %s and the system's folders"
-                % (where, root_dir))
-        if written and not app["layouts"]:
-            bad("%s: written needs the preRemove hook, which only an app with layouts has" % where)
+                           and not re.search(r"/\.\.?(?:/|$)", p) and not _is_known(p)
+                           and (not _is_under(p, root_dir) or _own_saved_file(p, own, placed)) for p in written)):
+            bad("%s: written is not a list of distinct absolute file paths, each outside %s and the system's "
+                "folders, or straight in %s and not a file the package or its hooks place there"
+                % (where, root_dir, own))
         apps[key] = dict(app, id=pkg_id)
 
     for key, app in apps.items():
@@ -220,6 +223,32 @@ def _is_under(path, folder):
 
 def _is_known(path):
     return path in KNOWN_PATHS or any(path.startswith(folder) for folder in KNOWN_FOLDERS)
+
+
+def _placed_names(app):
+    """The names in an app's plugin folder that are the package's, its hooks', or an owner's gateway-ip.txt."""
+    folder = app["folder"]
+    workers = app["workers"] if isinstance(app["workers"], list) else []
+    return {"lib%s.so" % folder, "%s.manifest" % folder, "%s.xml" % folder, image_zip(folder), "layouts",
+            "gateway-ip.txt"} | {w for w in workers if isinstance(w, str)}
+
+
+def _own_saved_file(path, own, placed):
+    """Whether `path` is a file straight in the plugin folder `own` that a plugin may save and a hook remove:
+    not one of `placed`, and not one select-layout.sh makes."""
+    name = path[len(own) + 1:]
+    return (path.startswith(own + "/") and "/" not in name and name not in placed
+            and not name.startswith(".select-layout"))
+
+
+def hook_templates(app):
+    """(kind, script) of each hook an app's package has: the layout hooks for an app with layouts, the hook that
+    removes what it saved for another app that saves files, and none for the rest."""
+    if app["layouts"]:
+        return HOOK_TEMPLATES
+    if app.get("written"):
+        return SAVED_HOOK_TEMPLATES
+    return ()
 
 
 def all_sizes(table):
@@ -513,18 +542,22 @@ def read_layouts(root, table, app, files):
 
 
 def stamp_hooks(root, table, app):
-    """{script name: bytes} of the hook templates with their placeholders filled in: @FOLDER@, @BASE_SIZE@,
-    @SIZES@ (the sizes the package holds a layout for, as a case pattern), @BASE_AT@ (the sizes of base_layout_at
-    as a case pattern, or one that matches no size) and @WRITTEN@ (the paths of `written`, with spaces between)."""
+    """{script name: bytes} of the app's hook templates (hook_templates) with their placeholders filled in:
+    @FOLDER@, @BASE_SIZE@, @SIZES@ (the sizes the package holds a layout for, as a case pattern), @BASE_AT@ (the
+    sizes of base_layout_at as a case pattern, or one that matches no size) and @WRITTEN@ (the paths of
+    `written`, with spaces between)."""
     values = {"@FOLDER@": app["folder"], "@BASE_SIZE@": table["base_size"],
               "@SIZES@": "|".join(layout_sizes(table, app)),
               "@BASE_AT@": "|".join(app.get("base_layout_at", [])) or "none",
               "@WRITTEN@": " ".join(app.get("written", []))}
     out = {}
-    for _, script in HOOK_TEMPLATES:
+    for _, script in hook_templates(app):
         path = "%s/%s.in" % (HOOKS, script)
+        full = os.path.join(root, path)
+        if not os.path.isfile(full) or os.path.islink(full):
+            raise Refused("the hook template %s is not there" % path)
         try:
-            with open(os.path.join(root, path), "rb") as f:
+            with open(full, "rb") as f:
                 text = f.read().decode("utf-8")
         except UnicodeDecodeError:
             raise Refused("%s is not UTF-8" % path)
@@ -547,9 +580,9 @@ def make_manifest(table, app, version):
     files += [{"src": "payload/bin/%s" % worker, "dest": "${var_plugins}/%s/%s" % (folder, worker), "mode": "0755"}
               for worker in app["workers"]]
     install = {"files": files}
-    if app["layouts"]:
+    if hook_templates(app):
         install["hooks"] = {kind: {"script": "hooks/%s" % script, "timeout": HOOK_TIMEOUT}
-                            for kind, script in HOOK_TEMPLATES}
+                            for kind, script in hook_templates(app)}
     install["reboot"] = "hmi-restart"
     manifest = {"manifestVersion": 1, "id": app["id"], "name": app["name"], "version": version,
                 "requires": {"agent": table["requires_agent"]}}
@@ -573,12 +606,16 @@ def stage(root, table, app, version, files, layouts=None, hooks=None):
             held = layouts[size]
             for name, data in held.items():
                 out["%slayouts/%s/%s" % (plugin, size, name)] = data
-        for script, data in hooks.items():
-            out["hooks/" + script] = data
     else:
         out[plugin + "%s.xml" % folder] = files["%s.xml" % folder]
         if app["images"]:
             out[plugin + image_zip(folder)] = files[image_zip(folder)]
+    if sorted(hooks or {}) != sorted(script for _, script in hook_templates(app)):
+        raise Refused("the app %s has the hooks %s, and was given %s"
+                      % (app["key"], ", ".join(s for _, s in hook_templates(app)) or "none",
+                         ", ".join(sorted(hooks or {})) or "none"))
+    for script, data in (hooks or {}).items():
+        out["hooks/" + script] = data
     for path in [PROJECT_LICENSE] + list(app.get("licenses", [])):
         full = os.path.join(root, path)
         if not os.path.isfile(full) or os.path.islink(full):
@@ -765,8 +802,11 @@ def build(root, table, key, version, out, nbtpkg, seed=None, pub=None, released=
         log("layouts: %s; hooks: %s" % (", ".join(layout_sizes(table, app)), ", ".join(sorted(hooks))))
         if app.get("base_layout_at"):
             log("at %s the app shows the %s layout" % (", ".join(app["base_layout_at"]), table["base_size"]))
-        if app.get("written"):
-            log("preRemove also removes: %s" % ", ".join(app["written"]))
+    elif hook_templates(app):
+        hooks = stamp_hooks(root, table, app)
+        log("hooks: %s" % ", ".join(sorted(hooks)))
+    if app.get("written"):
+        log("preRemove %sremoves: %s" % ("also " if app["layouts"] else "", ", ".join(app["written"])))
     staged, manifest = stage(root, table, app, version, files, layouts, hooks)
 
     with tempfile.TemporaryDirectory(prefix="nbtpkg-stage-") as work:

@@ -122,6 +122,7 @@ REMOVE_HOOK = "#!/bin/sh\nrm -f \"$NBT_VAR_PLUGINS_DIR/@FOLDER@/@FOLDER@.xml\"\n
 WRITTEN = {
     "boostdeck": ["/var/opt/hmi/data/ID5/BoostDeck.prefs", "/var/opt/hmi/data/ID5/BoostDeck.signals"],
     "shiftdeck": ["/var/opt/hmi/data/ID5/ShiftDeck.prefs"],
+    "hud-gauges": ["/var/opt/hmi/data/ID5/Plugins/HudTest/hud-enabled"],
     "launchdeck": ["/var/opt/hmi/data/ID5/LaunchDeck.prefs", "/var/opt/hmi/data/ID5/LaunchDeck.records",
                    "/var/opt/hmi/data/ID5/LaunchDeck.60-130", "/var/opt/hmi/data/ID5/LaunchDeck.0-100",
                    "/var/opt/hmi/data/ID5/LaunchDeck.100-200"],
@@ -219,6 +220,17 @@ class FixtureCase(unittest.TestCase):
         self.out = tempfile.mkdtemp(prefix="make-nbtpkg-out-")
         self.addCleanup(shutil.rmtree, self.out, True)
 
+    def saving_alpha(self, template=True):
+        """Alpha, an app without layouts, saving a file in its own folder and one outside it."""
+        saved = [PLUGINS_ROOT + "/Alpha/alpha-on", "/var/a/Alpha.state"]
+        self.fx.table["apps"][0]["written"] = saved
+        lib = self.fx.zips["packages/one.zip"]["Alpha/libAlpha.so"]
+        self.fx.zips["packages/one.zip"]["Alpha/libAlpha.so"] = lib + b"\0" + b"\0".join(p.encode() for p in saved) + b"\0"
+        self.fx.write()
+        if template:
+            self.fx.put("%s/remove-saved.sh.in" % m.HOOKS, b"#!/bin/sh\n# @FOLDER@\nwritten=\"@WRITTEN@\"\n")
+        return saved
+
     def refused(self, call, *needles):
         with self.assertRaises(m.Refused) as caught:
             call()
@@ -285,13 +297,23 @@ class TableTests(FixtureCase):
             (lambda t: t["apps"][2].update(written=["/var/$x"]), "written"),
             (lambda t: t["apps"][2].update(written=["/var/x*"]), "written"),
             (lambda t: t["apps"][2].update(written=["/var/x/"]), "written"),
-            (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT + "/Delta/x"]), "written"),
+            (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT + "/Alpha/x"]), "written"),
+            (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT + "/Delta"]), "written"),
+            (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT + "/Delta/deeper/x"]), "written"),
+            (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT + "/Delta/libDelta.so"]), "written"),
+            (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT + "/Delta/Delta.manifest"]), "written"),
+            (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT + "/Delta/Delta.xml"]), "written"),
+            (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT + "/Delta/Delta_ALL_Images.zip"]), "written"),
+            (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT + "/Delta/delta-qnx"]), "written"),
+            (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT + "/Delta/layouts"]), "written"),
+            (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT + "/Delta/gateway-ip.txt"]), "written"),
+            (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT + "/Delta/.select-layout.xml"]), "written"),
+            (lambda t: t["apps"][0].update(written=[PLUGINS_ROOT + "/Alpha/alpha-helper-qnx"]), "written"),
             (lambda t: t["apps"][2].update(written=[PLUGINS_ROOT]), "written"),
             (lambda t: t["apps"][2].update(written=["/usr/lib/x.so"]), "written"),
             (lambda t: t["apps"][2].update(written=["/dev/null"]), "written"),
             (lambda t: t["apps"][2].update(written=["/var/opt/hmi/data/ID5/gateway-ip.txt"]), "written"),
             (lambda t: t["apps"][2].update(written=["/var/x", "/var/x"]), "written"),
-            (lambda t: t["apps"][0].update(written=["/var/x"]), "written needs the preRemove hook"),
         ]
         for mutate, needle in cases:
             with self.subTest(needle=needle):
@@ -311,7 +333,7 @@ class TableTests(FixtureCase):
                     self.assertEqual(app["written"], WRITTEN[app["key"]])
                 else:
                     self.assertEqual(m.layout_sizes(table, app), every)
-                    self.assertNotIn("written", app)
+                    self.assertEqual(app.get("written"), WRITTEN.get(key))
 
 
 # ---- checks of the upstream plugin ----------------------------------------------------------------------------
@@ -525,6 +547,31 @@ class ManifestTests(FixtureCase):
             "payload/Bravo/libBravo.so", "payload/Bravo/Bravo.manifest", "payload/Bravo/Bravo.xml",
             "payload/bin/bravo-qnx", "licenses/LICENSE"]))
 
+    def test_without_layouts_saving(self):
+        saved = self.saving_alpha()
+        table = self.fx.table_now()
+        app = table["apps"]["alpha"]
+        self.assertEqual(m.hook_templates(app), (("preRemove", "remove-saved.sh"),))
+        self.assertEqual(m.hook_templates(table["apps"]["bravo"]), ())
+        self.assertEqual(m.make_manifest(table, app, "1.0.0")["install"]["hooks"],
+                         {"preRemove": {"script": "hooks/remove-saved.sh", "timeout": 30}})
+        self.assertNotIn("hooks", m.make_manifest(table, table["apps"]["bravo"], "1.0.0")["install"])
+        hooks = m.stamp_hooks(self.fx.root, table, app)
+        self.assertEqual(hooks, {"remove-saved.sh": ("#!/bin/sh\n# Alpha\nwritten=\"%s\"\n" % " ".join(saved)).encode()})
+        staged, _ = m.stage(self.fx.root, table, app, "1.0.0", self.fx.read("alpha"), hooks=hooks)
+        self.assertEqual(staged["hooks/remove-saved.sh"], hooks["remove-saved.sh"])
+        self.assertIn("payload/Alpha/Alpha.xml", staged)
+        self.refused(lambda: m.stage(self.fx.root, table, app, "1.0.0", self.fx.read("alpha")),
+                     "the app alpha has the hooks remove-saved.sh, and was given none")
+        self.refused(lambda: m.stage(self.fx.root, table, table["apps"]["bravo"], "1.0.0", self.fx.read("bravo"),
+                                     hooks=hooks), "the app bravo has the hooks none, and was given remove-saved.sh")
+
+    def test_saving_template_missing(self):
+        self.saving_alpha(template=False)
+        table = self.fx.table_now()
+        self.refused(lambda: m.stamp_hooks(self.fx.root, table, table["apps"]["alpha"]),
+                     "the hook template nbtapps/hooks/remove-saved.sh.in is not there")
+
     def test_licence_missing(self):
         os.remove(self.fx.path("source", "third-party", "T-LICENSE"))
         table = self.fx.table_now()
@@ -649,6 +696,18 @@ class LayoutTests(FixtureCase):
             info = NBTPKG.verify_package(f.read(), allow_unsigned=True)
         self.assertEqual(info["flags"], ["runs-scripts", "needs-reboot"])
         self.assertEqual(result["manifest"]["conflicts"], [{"id": "com.example.test.alpha"}])
+
+    @needs_nbtpkg
+    def test_without_layouts_saving_builds(self):
+        self.saving_alpha()
+        result = m.build(self.fx.root, self.fx.table_now(), "alpha", "1.0.0", self.out, NBTPKG, log=QUIET)
+        with open(result["archive"], "rb") as f:
+            data = f.read()
+        info = NBTPKG.verify_package(data, allow_unsigned=True)
+        self.assertEqual(info["flags"], ["runs-scripts", "needs-reboot"])
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            self.assertIn("hooks/remove-saved.sh", z.namelist())
+            self.assertNotIn("hooks/select-layout.sh", z.namelist())
 
 
 # ---- arguments and the record ---------------------------------------------------------------------------------
@@ -911,7 +970,9 @@ class RealZipTests(unittest.TestCase):
                 data = archives[0]
                 info = NBTPKG.verify_package(data, keys=[public])
                 self.assertEqual((info["id"], info["version"]), (app["id"], "1.0.0"))
-                self.assertEqual(info["flags"], ["needs-reboot"])
+                hooks = [script for _, script in m.hook_templates(app)]
+                self.assertEqual(info["flags"], (["runs-scripts"] if hooks else []) + ["needs-reboot"])
+                self.assertEqual(hooks, ["remove-saved.sh"] if key == "hud-gauges" else [])
                 placed = m.make_manifest(table, app, "1.0.0")["install"]["files"]
                 self.assertEqual(result["manifest"]["install"]["files"], placed)
                 names = {c["path"] for c in result["manifest"]["contents"]}
@@ -919,6 +980,7 @@ class RealZipTests(unittest.TestCase):
                             if n not in app["workers"]}
                 expected |= {"payload/bin/" + w for w in app["workers"]}
                 expected |= {"licenses/" + os.path.basename(p) for p in [m.PROJECT_LICENSE] + app.get("licenses", [])}
+                expected |= {"hooks/" + script for script in hooks}
                 self.assertEqual(names, expected)
                 if nbtcat is not None:
                     facts, problems = nbtcat.inspect_archive(app["id"], "1.0.0", data, [public])
