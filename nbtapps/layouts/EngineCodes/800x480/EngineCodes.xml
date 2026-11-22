@@ -36,92 +36,92 @@
         <components>
           <image id="328" model="95">
             <properties>
-              <property id="20" value="22" />
-              <property id="21" value="9" />
-              <property id="9" value="700" />
-              <property id="10" value="352" />
+              <property id="20" value="21" />
+              <property id="21" value="5" />
+              <property id="9" value="640" />
+              <property id="10" value="201" />
               <property id="2" value="false" />
               <property id="3" value="true" />
             </properties>
           </image>
           <label id="320" model="80">
             <properties>
-              <property id="20" value="36" />
-              <property id="21" value="20" />
-              <property id="9" value="667" />
-              <property id="10" value="55" />
+              <property id="20" value="33" />
+              <property id="21" value="11" />
+              <property id="9" value="610" />
+              <property id="10" value="31" />
             </properties>
           </label>
           <label id="321" model="81">
             <properties>
-              <property id="20" value="39" />
-              <property id="21" value="83" />
-              <property id="9" value="202" />
-              <property id="10" value="55" />
+              <property id="20" value="35" />
+              <property id="21" value="47" />
+              <property id="9" value="185" />
+              <property id="10" value="31" />
             </properties>
           </label>
           <label id="322" model="82">
             <properties>
-              <property id="20" value="39" />
-              <property id="21" value="150" />
-              <property id="9" value="202" />
-              <property id="10" value="55" />
+              <property id="20" value="35" />
+              <property id="21" value="86" />
+              <property id="9" value="185" />
+              <property id="10" value="31" />
             </properties>
           </label>
           <label id="323" model="83">
             <properties>
-              <property id="20" value="39" />
-              <property id="21" value="217" />
-              <property id="9" value="202" />
-              <property id="10" value="55" />
+              <property id="20" value="35" />
+              <property id="21" value="124" />
+              <property id="9" value="185" />
+              <property id="10" value="31" />
             </properties>
           </label>
           <label id="324" model="84">
             <properties>
-              <property id="20" value="39" />
-              <property id="21" value="284" />
-              <property id="9" value="202" />
-              <property id="10" value="55" />
+              <property id="20" value="35" />
+              <property id="21" value="162" />
+              <property id="9" value="185" />
+              <property id="10" value="31" />
             </properties>
           </label>
           <button id="310" action="23" text="Read engine codes">
             <properties>
-              <property id="20" value="31" />
-              <property id="21" value="370" />
-              <property id="9" value="288" />
-              <property id="10" value="52" />
+              <property id="20" value="28" />
+              <property id="21" value="211" />
+              <property id="9" value="263" />
+              <property id="10" value="30" />
             </properties>
           </button>
           <label id="330" model="91">
             <properties>
-              <property id="20" value="247" />
-              <property id="21" value="83" />
-              <property id="9" value="458" />
-              <property id="10" value="58" />
+              <property id="20" value="226" />
+              <property id="21" value="47" />
+              <property id="9" value="418" />
+              <property id="10" value="33" />
             </properties>
           </label>
           <label id="331" model="92">
             <properties>
-              <property id="20" value="247" />
-              <property id="21" value="150" />
-              <property id="9" value="458" />
-              <property id="10" value="58" />
+              <property id="20" value="226" />
+              <property id="21" value="86" />
+              <property id="9" value="418" />
+              <property id="10" value="33" />
             </properties>
           </label>
           <label id="332" model="93">
             <properties>
-              <property id="20" value="247" />
-              <property id="21" value="217" />
-              <property id="9" value="458" />
-              <property id="10" value="58" />
+              <property id="20" value="226" />
+              <property id="21" value="124" />
+              <property id="9" value="418" />
+              <property id="10" value="33" />
             </properties>
           </label>
           <label id="333" model="94">
             <properties>
-              <property id="20" value="247" />
-              <property id="21" value="284" />
-              <property id="9" value="458" />
-              <property id="10" value="58" />
+              <property id="20" value="226" />
+              <property id="21" value="162" />
+              <property id="9" value="418" />
+              <property id="10" value="33" />
             </properties>
           </label>
         </components>

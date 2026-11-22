@@ -103,6 +103,7 @@ TABLE = {
     "plugins_root": PLUGINS_ROOT,
     "base_size": "1280x480",
     "generated_sizes": ["800x480", "1920x720"],
+    "base_shown_at": ["1440x540"],
     "apps": [
         {"key": "alpha", "name": "Alpha", "folder": "Alpha", "zip": "packages/one.zip",
          "workers": ["alpha-qnx", "alpha-helper-qnx"], "connector": 301, "images": True, "layouts": False,
@@ -262,7 +263,8 @@ def make_keys(folder):
 class TableTests(FixtureCase):
     def test_real_table_loads(self):
         table = m.load_table(REPO_ROOT)
-        self.assertEqual(len(table["apps"]), 10)
+        self.assertEqual(len(table["apps"]), 13)
+        self.assertEqual(table["apps"]["mg-flasher"]["conflicts"], ["mhd-suite", "bootmod3-suite"])
         self.assertEqual(table["apps"]["mhd-suite"]["id"], "com.github.nbtapps.mhd-suite")
 
     def test_hud_gauges_licences_are_the_zips(self):
@@ -284,6 +286,12 @@ class TableTests(FixtureCase):
             (lambda t: t["apps"][0].update(licenses=["source/../x"]), "licenses"),
             (lambda t: t["apps"][0].update(key="Alpha"), "key"),
             (lambda t: t.update(generated_sizes=["1280x480"]), "generated_sizes"),
+            (lambda t: t.update(base_shown_at=["800x480"]), "base_shown_at"),          # 720 units, not 1260
+            (lambda t: t.update(base_shown_at=["1280x480"]), "base_shown_at"),
+            (lambda t: t.update(base_shown_at=["1920x720"]), "base_shown_at"),         # a generated size here
+            (lambda t: t.update(base_shown_at=["1440x540", "1440x540"]), "base_shown_at"),
+            (lambda t: t.update(base_shown_at="1440x540"), "base_shown_at"),
+            (lambda t: t.pop("base_shown_at"), "has the keys"),
             (lambda t: t["apps"][2].update(base_layout_at=["1440x540"]), "base_layout_at"),
             (lambda t: t["apps"][2].update(base_layout_at=["1280x480"]), "base_layout_at"),
             (lambda t: t["apps"][2].update(base_layout_at=["800x480", "800x480"]), "base_layout_at"),
@@ -330,16 +338,14 @@ class TableTests(FixtureCase):
 
     def test_real_table_overrides(self):
         table = m.load_table(REPO_ROOT)
-        every = ["1280x480", "800x480", "960x480", "1440x540", "1920x720"]
+        every = ["1280x480", "800x480", "960x480"]
         self.assertEqual(m.all_sizes(table), every)
+        self.assertEqual(table["base_shown_at"], ["1440x540", "1920x720"])
         for key, app in table["apps"].items():
             with self.subTest(key=key):
-                if key in ("boostdeck", "shiftdeck", "launchdeck"):
-                    self.assertEqual(m.layout_sizes(table, app), ["1280x480", "800x480", "960x480", "1920x720"])
-                    self.assertEqual(app["written"], WRITTEN[app["key"]])
-                else:
-                    self.assertEqual(m.layout_sizes(table, app), every)
-                    self.assertEqual(app.get("written"), WRITTEN.get(key))
+                self.assertNotIn("base_layout_at", app)
+                self.assertEqual(m.layout_sizes(table, app), every)
+                self.assertEqual(app.get("written"), WRITTEN.get(key))
                 self.assertEqual(app.get("written_before"),
                                  ["/var/opt/hmi/data/ID5/Plugins/HudTest/hud-enabled"] if key == "hud-gauges" else None)
 
@@ -423,6 +429,18 @@ class PluginTests(FixtureCase):
         self.change("packages/one.zip", "Alpha/libAlpha.so", lib.replace(b"/alpha-helper-qnx\0", b"/other-qnx\0"))
         self.refused(lambda: self.fx.read("alpha"), "does not hold the path %s/Alpha/alpha-helper-qnx" % PLUGINS_ROOT)
 
+    def test_worker_path_put_together(self):
+        """The folder and a format with the worker's name after it, both whole strings, will do (HybridDeck)."""
+        lib = self.fx.zips["packages/one.zip"]["Alpha/libAlpha.so"]
+        folder = ("%s/Alpha/" % PLUGINS_ROOT).encode()
+        together = lib.replace(folder + b"alpha-helper-qnx\0", b"x\0") + b"\0" + folder + b"\0%salpha-helper-qnx\0"
+        self.change("packages/one.zip", "Alpha/libAlpha.so", together)
+        self.fx.read("alpha")
+        self.change("packages/one.zip", "Alpha/libAlpha.so", together.replace(b"\0%salpha-helper-qnx\0", b"\0x\0"))
+        self.refused(lambda: self.fx.read("alpha"), "does not hold the path %s/Alpha/alpha-helper-qnx" % PLUGINS_ROOT)
+        self.change("packages/one.zip", "Alpha/libAlpha.so", together.replace(b"\0" + folder + b"\0", b"\0x\0"))
+        self.refused(lambda: self.fx.read("alpha"), "does not hold the path %s/Alpha/alpha-helper-qnx" % PLUGINS_ROOT)
+
     def test_worker_path_is_whole(self):
         lib = self.fx.zips["packages/one.zip"]["Alpha/libAlpha.so"]
         self.change("packages/one.zip", "Alpha/libAlpha.so", lib.replace(b"/alpha-qnx\0", b"/alpha-qnx2\0"))
@@ -458,7 +476,8 @@ class PluginTests(FixtureCase):
                      b"/var/opt/hmi/data/ID5/gateway-ip.txt", b"/opt/aa/nbt-aad",
                      b"/var/opt/hmi/data/ID5/Plugins/NbtAad/NbtAad.manifest",
                      b"/var/opt/hmi/data/rw/Plugins/CarPlayMenu/librghook.so",
-                     b"/opt/mm/lib/libasound/libasound.so", b"/work/build/gcc-4.9.4/libgcc/config/arm/bpabi.S"):
+                     b"/opt/mm/lib/libasound/libasound.so", b"/work/build/gcc-4.9.4/libgcc/config/arm/bpabi.S",
+                     b"/var/opt/hmi/data/rw/mgflasher-live-profile.txt"):
             self.with_path(path)
             self.with_path(path, "Delta/delta-qnx")
         self.fx.read("delta")

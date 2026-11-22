@@ -51,8 +51,10 @@ PROPERTY = re.compile(rb'<property id="([0-9]+)" value="([^"]*)"')
 
 
 def rule(value, size, base="1280x480", pid="9"):
+    """The share of the base layout's 1260 units of width that a screen gives an app, 540 W / H - 180 (upstream's
+    stage-payload.py), along both axes."""
     (w, h), (bw, bh) = [tuple(int(n) for n in s.split("x")) for s in (size, base)]
-    factor = Fraction(w, bw) if AXIS[pid] == "x" else Fraction(h, bh)
+    factor = Fraction(540 * w // h - 180, 540 * bw // bh - 180)
     return max(1 if pid in SIZE_IDS else 0, round(Fraction(value) * factor))
 
 
@@ -111,9 +113,12 @@ class CommittedLayoutTests(unittest.TestCase):
         """[(app key, folder, size)] of every generated layout."""
         return [(app["key"], app["folder"], size) for app in self.apps for size in self.table["generated_sizes"]]
 
-    def test_the_five_apps(self):
+    def test_the_layout_apps(self):
         self.assertEqual([app["folder"] for app in self.apps],
-                         ["BoostDeck", "ShiftDeck", "EngineCodes", "MhdMaps", "Bootmod3Suite", "LaunchDeck"])
+                         ["BoostDeck", "ShiftDeck", "EngineCodes", "MhdMaps", "Bootmod3Suite", "LaunchDeck",
+                          "WarmDeck", "HybridDeck", "MgFlasher"])
+        self.assertEqual(self.table["generated_sizes"], ["800x480", "960x480"])
+        self.assertEqual(self.table["base_shown_at"], ["1440x540", "1920x720"])
 
     def test_nothing_else_is_there(self):
         self.assertEqual(sorted(os.listdir(self.path())), sorted(app["folder"] for app in self.apps))
@@ -226,9 +231,13 @@ class RuleTests(unittest.TestCase):
 
     def test_factors(self):
         table = {"base_size": "1280x480"}
-        self.assertEqual(L.factors(table, "800x480"), (Fraction(5, 8), 1))
-        self.assertEqual(L.factors(table, "1440x540"), (Fraction(9, 8), Fraction(9, 8)))
-        self.assertEqual(L.scaled_size(1, 1, *L.factors(table, "1920x720")), (2, 2))
+        self.assertEqual(L.factors(table, "800x480"), (Fraction(4, 7), Fraction(4, 7)))     # 720 of 1260 units
+        self.assertEqual(L.factors(table, "960x480"), (Fraction(5, 7), Fraction(5, 7)))     # 900
+        self.assertEqual(L.factors(table, "1440x540"), (1, 1))                              # 1260: every 8:3 screen
+        self.assertEqual(L.factors(table, "1920x720"), (1, 1))
+        self.assertEqual(L.scaled_size(1, 1, *L.factors(table, "800x480")), (1, 1))
+        self.assertEqual([m.content_width(s) for s in ("800x480", "960x480", "1280x480", "1440x540", "1920x720")],
+                         [720, 900, 1260, 1260, 1260])
 
     def test_without_pillow(self):
         with mock.patch.dict(sys.modules, {"PIL": None}):
@@ -286,13 +295,14 @@ BASE_XML = """<?xml version='1.0' encoding='utf-8'?>
 # The values of BASE_XML at each size, worked out by hand.
 VALUES = {
     "1280x480": dict(x1=1172, y1=76, w1=58, h1=1, x2=0, y2=9, w2=1, h2=400),
-    "800x480": dict(x1=732, y1=76, w1=36, h1=1, x2=0, y2=9, w2=1, h2=400),     # 732.5, 36.25, 0.625
-    "960x480": dict(x1=879, y1=76, w1=44, h1=1, x2=0, y2=9, w2=1, h2=400),     # 43.5, 0.75
-    "1440x540": dict(x1=1318, y1=86, w1=65, h1=1, x2=0, y2=10, w2=1, h2=450),  # 1318.5, 85.5, 65.25, 1.125, 10.125
-    "1920x720": dict(x1=1758, y1=114, w1=87, h1=2, x2=0, y2=14, w2=2, h2=600),  # 1.5 (h1, w2), 13.5
-    "320x240": dict(x1=293, y1=38, w1=14, h1=1, x2=0, y2=4, w2=1, h2=200),     # 14.5, 0.5, 4.5, 0.25
+    # x 4/7 (720 of 1260 units): 669.71, 43.43, 33.14, 0.57, 5.14, 228.57
+    "800x480": dict(x1=670, y1=43, w1=33, h1=1, x2=0, y2=5, w2=1, h2=229),
+    # x 5/7 (900): 837.14, 54.29, 41.43, 0.71, 6.43, 285.71
+    "960x480": dict(x1=837, y1=54, w1=41, h1=1, x2=0, y2=6, w2=1, h2=286),
+    # x 3/7 (540): 502.29, 32.57, 24.86, 0.43, 3.86, 171.43
+    "320x240": dict(x1=502, y1=33, w1=25, h1=1, x2=0, y2=4, w2=1, h2=171),
 }
-SIZES = ["800x480", "960x480", "1440x540", "1920x720", "320x240"]
+SIZES = ["800x480", "960x480", "320x240"]
 
 
 def png(image, **options):
@@ -328,7 +338,8 @@ class GeneratorTests(unittest.TestCase):
         self.root = tempfile.mkdtemp(prefix="make-layouts-test-")
         self.addCleanup(shutil.rmtree, self.root, True)
         self.table = {"namespace": "com.example.test", "requires_agent": ">=1.6.0", "plugins_root": t.PLUGINS_ROOT,
-                      "base_size": "1280x480", "generated_sizes": list(SIZES), "apps": [
+                      "base_size": "1280x480", "generated_sizes": list(SIZES),
+                      "base_shown_at": ["1440x540", "1920x720"], "apps": [
                           {"key": "delta", "name": "Delta", "folder": "Delta", "zip": "packages/two.zip",
                            "workers": ["delta-qnx"], "connector": 303, "images": True, "layouts": True},
                           {"key": "alpha", "name": "Alpha", "folder": "Alpha", "zip": "packages/two.zip",
@@ -407,12 +418,10 @@ class GeneratorTests(unittest.TestCase):
     def test_unchanged_size_is_copied_byte_for_byte(self):
         self.generate()
         tiny = dict(self.images)["2.png"]
-        for size in ("800x480", "960x480", "1440x540", "320x240"):
+        for size in SIZES:     # 1x1 stays 1x1: a width or height is at least 1
             with self.subTest(size=size):
                 made = dict((i.filename, d) for i, d in zip_entries(self.read("Delta", size, "Delta_ALL_Images.zip")))
                 self.assertEqual(made["2.png"], tiny)
-        made = dict((i.filename, d) for i, d in zip_entries(self.read("Delta", "1920x720", "Delta_ALL_Images.zip")))
-        self.assertEqual(png_size(made["2.png"])[:2], (2, 2))     # round(1.5) is 2
 
     def test_source_and_layout(self):
         self.generate()
@@ -481,13 +490,13 @@ class GeneratorTests(unittest.TestCase):
              "Delta/960x480/Delta.xml differs"),
             (lambda: self.put(zip_path, make_zip(pixel_changed(self.entries(zip_path)))),
              "800x480/Delta_ALL_Images.zip: 10.png: its pixels differ"),
-            (lambda: self.put(zip_path, make_zip(resized(self.entries(zip_path)))), "10.png is 5x5, not 36x76"),
+            (lambda: self.put(zip_path, make_zip(resized(self.entries(zip_path)))), "10.png is 5x5, not 33x43"),
             (lambda: self.put(zip_path, make_zip(list(reversed(self.entries(zip_path))))), "the order differs"),
             (lambda: self.put(zip_path, make_zip(self.entries(zip_path)[1:])), "lacks 10.png"),
             (lambda: self.put(zip_path, b"not a zip"), "is not a readable zip"),
             (lambda: self.put("nbtapps/layouts/Delta/800x480/notes.txt", b"x"),
              "Delta/800x480/notes.txt is there and should not be"),
-            (lambda: shutil.rmtree(self.layouts("Delta", "1920x720")), "Delta/1920x720/ is not there"),
+            (lambda: shutil.rmtree(self.layouts("Delta", "320x240")), "Delta/320x240/ is not there"),
             (lambda: self.put("nbtapps/layouts/Alpha/SOURCE", b"x"), "nbtapps/layouts/Alpha is there and is no"),
             (lambda: self.put("nbtapps/layouts/Delta/SOURCE", b"x"), "Delta/SOURCE differs"),
             (lambda: self.write_base(xml=self.xml.replace(b'value="58"', b'value="60"')), "Delta/SOURCE differs"),

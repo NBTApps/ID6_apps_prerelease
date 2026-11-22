@@ -17,18 +17,23 @@ never changed here.
 
 | Key | Name | Plugin folder | From | Connector id | Layouts |
 |---|---|---|---|---|---|
-| `boostdeck` | BoostDeck | `BoostDeck` | `packages/dashboard.zip` | 100 | per screen size, 1280×480 at 1440×540 |
-| `shiftdeck` | ShiftDeck | `ShiftDeck` | `packages/dashboard.zip` | 104 | per screen size, 1280×480 at 1440×540 |
+| `boostdeck` | BoostDeck | `BoostDeck` | `packages/dashboard.zip` | 100 | per screen size |
+| `shiftdeck` | ShiftDeck | `ShiftDeck` | `packages/dashboard.zip` | 104 | per screen size |
 | `engine-fault-codes` | Engine Fault Codes | `EngineCodes` | `packages/dashboard.zip` | 102 | per screen size |
 | `mhd-suite` | MHD+ Suite | `MhdMaps` | `packages/dashboard.zip` | 103 | per screen size |
 | `bootmod3-suite` | Bootmod3 Suite | `Bootmod3Suite` | `packages/bootmod3.zip` | 111 | per screen size |
 | `xdrive-control` | xDrive Control | `XDriveControl` | `packages/xdrive.zip` | 112 | none (no images) |
 | `road-jet` | Road Jet | `RoadJet` | `packages/road-jet.zip` | 217 | 1280×480 only |
 | `beamer` | BEAMer | `BEAMer` | `packages/beamer.zip` | 218 | 1280×480 only |
-| `launchdeck` | LaunchDeck | `LaunchDeck` | `packages/launchdeck.zip` | 120 | per screen size, 1280×480 at 1440×540 |
+| `launchdeck` | LaunchDeck | `LaunchDeck` | `packages/launchdeck.zip` | 120 | per screen size |
 | `hud-gauges` | HUD Gauges | `HudTest` | `packages/hud-gauges.zip` | 107 | none (no images) |
+| `warmdeck` | WarmDeck | `WarmDeck` | `packages/warmdeck.zip` | 115 | per screen size |
+| `hybriddeck` | HybridDeck | `HybridDeck` | `packages/hybriddeck.zip` | 117 | per screen size |
+| `mg-flasher` | MG Flasher | `MgFlasher` | `packages/mgflasher.zip` | 116 | per screen size |
 
-MHD+ Suite and Bootmod3 Suite conflict: a head unit has one or the other. Bootmod3 Suite and xDrive Control also
+MHD+ Suite, Bootmod3 Suite and MG Flasher conflict: a car's tune is from one of them, and upstream's installer
+offers one tuning menu. MHD+ Suite and Bootmod3 Suite name each other; MG Flasher names both, which the agent
+honours whichever package declares it, so the two released packages are unchanged. Bootmod3 Suite and xDrive Control also
 carry `source/third-party/idrive7-apps-LICENSE`. HUD Gauges carries NBT-AAD's licence and notice
 (`nbtapps/licenses/`, the `LICENSE.md` and `NOTICE.txt` of `packages/hud-gauges.zip`, which a test keeps equal):
 its worker `hud-shape-qnx` is built with NBT-AAD's HUD terminal and MOST client, under the PolyForm Noncommercial
@@ -70,11 +75,15 @@ Before it builds, `make_nbtpkg.py build` refuses the app unless:
   app with images, `<Folder>_ALL_Images.zip`. A file upstream adds later stops the build until this folder is
   updated for it;
 - the library and the workers are 32-bit little-endian ARM ELF files (a shared library, and programs);
-- the library holds `/var/opt/hmi/data/ID5/Plugins/<Folder>/<worker>` for each worker;
+- the library holds `/var/opt/hmi/data/ID5/Plugins/<Folder>/<worker>` for each worker, or, as HybridDeck's
+  does, the folder `/var/opt/hmi/data/ID5/Plugins/<Folder>/` and `%s<worker>` as two strings that it puts
+  together while it runs;
 - every absolute path the library or a worker holds as a whole string is one this folder knows: `/dev/null`,
   `/var/opt/hmi/data/ID5/gateway-ip.txt` (see [Notes](#notes)), a path under `/lib/`, `/usr/lib/`, `/opt/sys/lib/`,
   `/fs/sda0/opt/sys/lib/` (the system partition's, where HUD Gauges' worker loads the MOST library from) or
   `/opt/mm/lib/` (where BoostDeck's chime loads the sound library from, `source/native/src/workers/boost_tone.c`),
+  `/var/opt/hmi/data/rw/mgflasher-live-profile.txt` (MG Flasher's optional readback locators, which an owner
+  writes and its worker only reads),
   the files of other add-ons that the dashboards and HUD Gauges only look for (native Android Auto's
   `/opt/aa/nbt-aad` and `NbtAad.manifest`, and CarPlay Advanced's `librghook.so`, see
   `source/native/src/common/gauge_coexistence.h`), a path under `/work/build/` (no folder on the head unit: the
@@ -119,7 +128,7 @@ make their own throwaway keys.
 
 ## Layouts and hooks
 
-Six apps (`"layouts": true`) need a layout file per screen resolution. Upstream ships the 1280×480 one only.
+Nine apps (`"layouts": true`) need a layout file per screen resolution. Upstream ships the 1280×480 one only.
 The rest come from two parts of this folder: `make_layouts.py` generates the layouts, and the hook scripts pick
 one on the head unit. `build` refuses one of these six apps when a file of either part is missing, and lists
 what is missing. Road Jet and BEAMer ship their 1280×480 layout only, with no hook. This is the contract both
@@ -129,7 +138,7 @@ parts keep to.
 
 - The base size is `apps.json`'s `base_size`, 1280x480. Its layout is `<Folder>.xml` and
   `<Folder>_ALL_Images.zip` from the upstream zip. It is not copied into this folder.
-- Each other size in `generated_sizes` (800x480, 960x480, 1440x540, 1920x720) is committed as:
+- Each other size in `generated_sizes` (800x480, 960x480) is committed as:
 
   ```
   nbtapps/layouts/<Folder>/<WxH>/<Folder>.xml
@@ -149,18 +158,24 @@ parts keep to.
   are stale. It also refuses a missing size, a folder or file there that is not listed above, a generated
   `<Folder>.xml` that is not XML or has an `entryButtonFocusID`, and an image zip that does not read back.
 
-`make_layouts.py` makes them, by the rule upstream's own desktop installer follows. For a size W×H, with
-fx = W/1280 and fy = H/480:
+`make_layouts.py` makes them, by the rule upstream's own desktop installer follows since v0.7.5
+(`source/tools/desktop-installer/stage-payload.py`), from Andreas Boehm's measurements in upstream's issue #113.
+The head unit lays every screen out in 540 units of height, scales the result to the screen, and gives the menu
+180 units of width, so an app gets 540 W/H − 180 units across (rounded down): 720 at 800×480, 900 at 960×480, and
+1260 on every 8:3 screen. For a size, with one factor f = its units / 1260 (4/7 at 800×480, 5/7 at 960×480):
 
-- in `<Folder>.xml`, each `<property id="20">` (x) and `id="9"` (width) value is multiplied by fx, and each
-  `id="21"` (y) and `id="10"` (height) value by fy. The file is changed as text, so every other byte is the base
-  file's;
-- each PNG in the image zip is resized to (width × fx, height × fy) in RGBA with a Lanczos filter, and saved as a
+- in `<Folder>.xml`, each `<property id="20">` (x), `id="9"` (width), `id="21"` (y) and `id="10"` (height) value
+  is multiplied by f. The file is changed as text, so every other byte is the base file's;
+- each PNG in the image zip is resized to (width × f, height × f) in RGBA with a Lanczos filter, and saved as a
   PNG. An image whose size does not change is copied as it is. The zip has the base's entries in the base's order,
   deflated, with a fixed time;
 - results are rounded to the nearest whole number, halves to the even one, and a width or height is at least 1.
 
-The 800×480 and 960×480 layouts are squeezed sideways and not taller, as the installer's are. The script reads
+The XML is byte for byte what the installer stages, and the images are of the same sizes (checked against
+v0.7.6). 1440×540 and 1920×720 are 8:3 screens: `apps.json`'s `base_shown_at` lists them, and they get the
+1280×480 layout, which the head unit scales to them. Until 0.1.3 these packages followed the installer's earlier
+rule, fx = W/1280 and fy = H/480, which made the 1440×540 and 1920×720 layouts 1.125 and 1.5 times as wide as
+the 1260 units those screens give, and the 800×480 and 960×480 ones wider than their 720 and 900 units. The script reads
 the base through `make_nbtpkg.py`'s checks, and refuses a base it does not know how to scale: a property id other
 than 2, 3, 9, 10, 20, 21 and 23, a value to scale that is not a plain non-negative whole number, or an image zip
 entry that is not a PNG named `<digits>.png`. It writes each app's folder whole, through a temporary folder
@@ -191,19 +206,17 @@ whole) need Pillow, and are skipped without it, as they are in the workflow.
 
 ### Sizes at which an app shows the base layout
 
-An app's `base_layout_at` in `apps.json` lists generated sizes at which its package holds no layout and the
-head unit shows the base one. BoostDeck and ShiftDeck have `["1440x540"]`. Upstream's issue #56 reports, from a
-1440×540 head unit on NBTevo_Y24073J, that their 1440×540 layouts are wider than the part of the screen an app
-gets, so the right-hand column is cut off; #75 and #77 look like the same fault. The generated layouts here are
-the same files as the desktop installer's (checked against v0.7.3), so they would be cut off too. The 1280×480
-layout is narrower and fits, with room left over. This has not been seen on a head unit: take the key out once
-upstream's layout fits, or once a 1440×540 car shows that it does.
+`base_shown_at` in `apps.json` lists the sizes, other than the base one, whose screens give an app as many layout
+units as the base one (each is checked to): `["1440x540", "1920x720"]`. No package holds a layout for them, and
+`select-layout.sh` places the 1280×480 one there, which the head unit scales to the screen. A layout of such a
+size that an older package left is not used.
 
-LaunchDeck has `["1440x540"]` too, with no report of its own: its page reaches as far right as ShiftDeck's
-(x + width up to 1156 at 1280×480, so 1300 at 1440×540).
-
-The layouts of such a size stay committed under `nbtapps/layouts/`, and `make_layouts.py` still makes and checks
-them. `build` leaves them out of the archive and out of `@SIZES@`.
+An app's `base_layout_at` lists generated sizes at which its package holds no layout and the head unit shows the
+base one, for a layout reported not to fit. No app has one now. BoostDeck, ShiftDeck and LaunchDeck had
+`["1440x540"]`, after upstream's issues #56, #75 and #77 reported their 1440×540 layouts cut off at the right:
+that was the earlier rule's layout, 1.125 times too wide, which `base_shown_at` replaces. A size in
+`base_layout_at` would stay committed under `nbtapps/layouts/`, and `make_layouts.py` would still make and check
+it. `build` leaves it out of the archive and out of `@SIZES@`.
 
 ### What the archive holds
 
@@ -217,8 +230,9 @@ removes them.
 
 - Templates are committed at `nbtapps/hooks/select-layout.sh.in` and `nbtapps/hooks/remove-layout.sh.in`.
 - `build` fills in `@FOLDER@` (the plugin folder), `@BASE_SIZE@` (`1280x480`), `@SIZES@` (the sizes the package
-  holds a layout for, joined with `|`, base first: `1280x480|800x480|960x480|1440x540|1920x720`, for a shell
-  `case`), `@BASE_AT@` (the app's `base_layout_at` sizes joined the same way, or `none`, which is no size) and
+  holds a layout for, joined with `|`, base first: `1280x480|800x480|960x480`, for a shell `case`),
+  `@SHOWN_AT@` (`base_shown_at` joined the same way, or `none`, which is no size), `@BASE_AT@` (the app's
+  `base_layout_at` sizes, the same way) and
   `@WRITTEN@` (the app's `written` paths with spaces between, or nothing). It refuses a template in which any
   other `@NAME@` is left. The results are `hooks/select-layout.sh` (`postInstall`) and `hooks/remove-layout.sh`
   (`preRemove`), each with a 30 second timeout.
@@ -359,8 +373,8 @@ needs a new version number.
   1.6.0-beta.1 only, which sorts below 1.6.0, so `requires_agent` is `>=1.6.0-beta.1`: with `>=1.6.0`, as version
   0.1.0 of each package has it, the beta agent refuses the package as `agent-too-old`. `nbtpkg.py` looks at the
   three numbers only, so its rule for `${var_plugins}` is met.
-- The generated layouts have not been seen on a head unit, and the hook scripts have not run on one. The
-  1440×540 choice for BoostDeck, ShiftDeck and LaunchDeck rests on upstream's issue reports alone.
+- The generated layouts have not been seen on a head unit through a package, and the hook scripts have not run
+  on one. The layout rule is upstream's installer's, from Andreas Boehm's measurements (issue #113).
 - The connector ids in the catalogue's `hmi-ids.json`, and each package's first pull request in nbtapps-packages.
 - No package checks the head unit's firmware. Upstream's desktop installer accepts the firmware and framework
   pairs in `source/docs/installer-profiles.json` only.

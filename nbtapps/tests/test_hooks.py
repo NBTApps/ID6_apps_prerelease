@@ -38,6 +38,7 @@ XML, ZIP = "%s.xml" % FOLDER, "%s_ALL_Images.zip" % FOLDER
 BASE = TABLE["base_size"]
 SIZES = m.all_sizes(TABLE)
 LAYOUT_APPS = [app for app in TABLE["apps"].values() if app["layouts"]]
+SCALED = "the screen is %s, to which the head unit scales the " + TABLE["base_size"] + " layout"
 SAVING_APP = TABLE["apps"]["hud-gauges"]   # an app without layouts that saves a file in its own folder
 
 # What the scripts may call. The tools are the ones a probe found on a head unit that the brief allows; the rest
@@ -199,7 +200,8 @@ WRITTEN_BEFORE = {
 class StaticTests(unittest.TestCase):
     def test_every_layout_app_stamps(self):
         self.assertEqual([app["key"] for app in LAYOUT_APPS],
-                         ["boostdeck", "shiftdeck", "engine-fault-codes", "mhd-suite", "bootmod3-suite", "launchdeck"])
+                         ["boostdeck", "shiftdeck", "engine-fault-codes", "mhd-suite", "bootmod3-suite", "launchdeck",
+                          "warmdeck", "hybriddeck", "mg-flasher"])
         for app in LAYOUT_APPS:
             with self.subTest(app=app["key"]):
                 hooks = stamped(app)
@@ -211,13 +213,11 @@ class StaticTests(unittest.TestCase):
                 self.assertIn("        %s)\n" % "|".join(m.layout_sizes(TABLE, app)), hooks["select-layout.sh"])
                 base_at, written = app.get("base_layout_at", []), app.get("written", [])
                 self.assertIn("        %s)\n" % ("|".join(base_at) or "none"), hooks["select-layout.sh"])
+                self.assertIn("        1440x540|1920x720)\n", hooks["select-layout.sh"])
                 self.assertIn('written="%s"\n' % " ".join(written), hooks["remove-layout.sh"])
-                if app["key"] in ("boostdeck", "shiftdeck", "launchdeck"):
-                    self.assertEqual(base_at, ["1440x540"])
-                    self.assertNotIn("1440x540", m.layout_sizes(TABLE, app))
-                    self.assertEqual(written, WRITTEN[app["key"]])
-                else:
-                    self.assertEqual((base_at, written), ([], []))
+                self.assertEqual(base_at, [])
+                self.assertEqual(m.layout_sizes(TABLE, app), ["1280x480", "800x480", "960x480"])
+                self.assertEqual(written, WRITTEN.get(app["key"], []))
 
     def test_syntax(self):
         work = tempfile.mkdtemp(prefix="hooks-syntax-")
@@ -465,8 +465,22 @@ class SelectTests(HookCase):
                 result = self.select()
                 if size is None:
                     self.assert_chosen(result, BASE, "the screen is 1280x4805, a size this app has no layout for")
+                elif size in TABLE["base_shown_at"]:
+                    self.assert_chosen(result, BASE, SCALED % size)
                 else:
                     self.assert_chosen(result, size)
+
+    def test_base_shown_at(self):
+        """An 8:3 screen other than the base size gets the base layout, which the head unit scales to it, also
+        when a layout of that size from an older version of the package is still there."""
+        self.assertEqual(TABLE["base_shown_at"], ["1440x540", "1920x720"])
+        for size in TABLE["base_shown_at"]:
+            with self.subTest(size=size):
+                x, y = size.split("x")
+                self.fake_lmc(b"resolution: x=%s, y=%s\n" % (x.encode(), y.encode()))
+                self.assert_chosen(self.select(), BASE, SCALED % size)
+                self.put_layout(size)
+                self.assert_chosen(self.select("upgrade"), BASE, SCALED % size)
 
     def test_unknown_size(self):
         self.fake_lmc(b"- resolution: x=1024, y=600\n")
@@ -522,31 +536,30 @@ class SelectTests(HookCase):
 
     def test_base_layout_at(self):
         """At a size in base_layout_at the package holds no layout, and the base one is shown."""
-        self.use(dict(APP, base_layout_at=["1440x540", "800x480"]))
-        for size in ("1440x540", "800x480"):
-            shutil.rmtree(os.path.join(self.dir, "layouts", size))
+        self.use(dict(APP, base_layout_at=["800x480"]))
+        shutil.rmtree(os.path.join(self.dir, "layouts", "800x480"))
         for size in SIZES:
             with self.subTest(size=size):
                 x, y = size.split("x")
                 self.fake_lmc(b"resolution: x=%s, y=%s\n" % (x.encode(), y.encode()))
-                if size in ("1440x540", "800x480"):
+                if size == "800x480":
                     self.assert_chosen(self.select(), BASE, "the screen is %s, and this app's layout of that size "
                                                             "is reported not to fit it" % size)
                 else:
                     self.assert_chosen(self.select(), size)
         # A layout of that size left by an older version of the package is not used either.
-        self.put_layout("1440x540")
-        self.fake_lmc(b"resolution: x=1440, y=540\n")
-        self.assert_chosen(self.select("upgrade"), BASE, "the screen is 1440x540, and this app's layout of that "
+        self.put_layout("800x480")
+        self.fake_lmc(b"resolution: x=800, y=480\n")
+        self.assert_chosen(self.select("upgrade"), BASE, "the screen is 800x480, and this app's layout of that "
                                                          "size is reported not to fit it")
 
     def test_known_size_without_its_layout(self):
         shutil.rmtree(os.path.join(self.dir, "layouts", "800x480"))
         self.fake_lmc(b"resolution: x=800, y=480\n")
         self.assert_chosen(self.select(), BASE, "the screen is 800x480, but layouts/800x480/%s is not there" % XML)
-        os.remove(os.path.join(self.dir, "layouts", "1920x720", ZIP))
-        self.fake_lmc(b"resolution: x=1920, y=720\n")
-        self.assert_chosen(self.select(), BASE, "the screen is 1920x720, but layouts/1920x720/%s is not there" % ZIP)
+        os.remove(os.path.join(self.dir, "layouts", "960x480", ZIP))
+        self.fake_lmc(b"resolution: x=960, y=480\n")
+        self.assert_chosen(self.select(), BASE, "the screen is 960x480, but layouts/960x480/%s is not there" % ZIP)
         os.remove(os.path.join(self.dir, "layouts", "960x480", XML))
         self.fake_lmc(b"resolution: x=960, y=480\n")
         self.assert_chosen(self.select(), BASE, "the screen is 960x480, but layouts/960x480/%s is not there" % XML)
@@ -593,7 +606,7 @@ class SelectTests(HookCase):
             self.assertEqual(held_xml.read(), b"<pluginApps size='800x480'/>\n")
             self.assertEqual(held_zip.read(), b"PK images of 800x480")
         self.fake_lmc(b"resolution: x=1920, y=720\n")
-        self.assert_chosen(self.select("upgrade"), "1920x720")
+        self.assert_chosen(self.select("upgrade"), BASE, SCALED % "1920x720")
         self.fake_lmc(b"", status=1)
         self.assert_chosen(self.select("upgrade"), BASE, "LayerManagerControl gave no screen resolution "
                                                          "(it exited with 1)")

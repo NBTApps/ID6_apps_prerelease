@@ -36,6 +36,9 @@ on:
           - beamer
           - launchdeck
           - hud-gauges
+          - warmdeck
+          - hybriddeck
+          - mg-flasher
       version:
         description: "The package's version: X.Y.Z, or X.Y.Z-pre.N"
         required: true

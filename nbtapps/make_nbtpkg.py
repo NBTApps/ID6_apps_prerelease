@@ -99,7 +99,10 @@ KNOWN_PATHS = ("/dev/null", "/var/opt/hmi/data/ID5/gateway-ip.txt",
                "/opt/hmi/ID5/data/ro/Plugins/NbtAad/NbtAad.manifest",
                "/var/opt/hmi/data/ID5/Plugins/NbtAad/NbtAad.manifest",
                "/var/opt/hmi/data/rw/Plugins/CarPlayMenu/librghook.so",
-               "/var/opt/hmi/data/ID5/Plugins/CarPlayMenu/librghook.so")
+               "/var/opt/hmi/data/ID5/Plugins/CarPlayMenu/librghook.so",
+               # MG Flasher's optional readback locators, which an owner writes and its worker only reads
+               # (source/native/src/workers/mg_flasher_worker.c, load_profile). No package places or removes it.
+               "/var/opt/hmi/data/rw/mgflasher-live-profile.txt")
 # The system's libraries are also read from /fs/sda0/opt/sys/lib/, where the system partition is mounted: HUD
 # Gauges' worker loads the MOST library from there. BoostDeck's chime loads the sound library from /opt/mm/lib/
 # (source/native/src/workers/boost_tone.c). /work/build/ is no folder on the head unit: the toolchain's libgcc,
@@ -129,7 +132,7 @@ def load_table(root=ROOT):
 
     if not isinstance(table, dict):
         bad("is not a JSON object")
-    known = {"namespace", "requires_agent", "plugins_root", "base_size", "generated_sizes", "apps"}
+    known = {"namespace", "requires_agent", "plugins_root", "base_size", "generated_sizes", "base_shown_at", "apps"}
     if set(table) != known:
         bad("has the keys %s, not %s" % (sorted(table), sorted(known)))
     if not isinstance(table["namespace"], str) or not PACKAGE_ID.fullmatch(table["namespace"]):
@@ -145,6 +148,12 @@ def load_table(root=ROOT):
     if (not isinstance(sizes, list) or not all(isinstance(s, str) and SIZE.fullmatch(s) for s in sizes)
             or len(set(sizes)) != len(sizes) or table["base_size"] in sizes):
         bad("generated_sizes is not a list of distinct WxH sizes other than base_size")
+    shown = table["base_shown_at"]
+    if (not isinstance(shown, list) or not all(isinstance(s, str) and SIZE.fullmatch(s) for s in shown)
+            or len(set(shown)) != len(shown) or table["base_size"] in shown or set(shown) & set(sizes)
+            or not all(content_width(s) == content_width(table["base_size"]) for s in shown)):
+        bad("base_shown_at is not a list of distinct WxH sizes, other than base_size and generated_sizes, whose "
+            "screens give an app as many layout units as base_size's")
     if not isinstance(table["apps"], list) or not table["apps"]:
         bad("apps is not a list of apps")
 
@@ -271,6 +280,15 @@ def hook_templates(app):
     if saved_files(app):
         return SAVED_HOOK_TEMPLATES
     return ()
+
+
+def content_width(size):
+    """The width, in the units of a layout, of the part of a WxH screen an app gets: 540 W / H - 180, rounded
+    down. Measured by Andreas Boehm (upstream's issue #113, source/tools/desktop-installer/stage-payload.py): the
+    head unit lays every screen out in 540 units of height and scales the result to the screen, and the menu takes
+    180 units. Every 8:3 screen (1280x480, 1440x540, 1920x720) so gives an app 1260 units, and one layout."""
+    width, height = (int(n) for n in size.split("x"))
+    return 540 * width // height - 180
 
 
 def all_sizes(table):
@@ -431,7 +449,12 @@ def check_plugin(table, app, files):
     for worker in app["workers"]:
         check_elf(where + worker, files[worker], (ET_EXEC, ET_DYN))
         wanted = ("%s/%s/%s" % (table["plugins_root"], folder, worker)).encode("ascii")
-        if wanted + b"\0" not in files[lib]:
+        # Or, as HybridDeck has it, the folder and a format that puts the worker's name after it (snprintf with
+        # "%s<worker>" and the folder, source/native/src/plugins/hybrid_deck.cpp).
+        put_together = (("%s/%s/" % (table["plugins_root"], folder)).encode("ascii"),
+                        ("%%s%s" % worker).encode("ascii"))
+        if (wanted + b"\0" not in files[lib]
+                and not all(_whole_string(files[lib], part) for part in put_together)):
             raise Refused("%s does not hold the path %s, where it would start its worker: the plugin would not "
                           "work from %s/%s/" % (where + lib, wanted.decode(), table["plugins_root"], folder))
 
@@ -467,6 +490,11 @@ def check_plugin(table, app, files):
 def path_strings(data):
     """The absolute paths a binary holds as whole strings (PATH_STRING), sorted."""
     return sorted({match.group(0).decode("ascii") for match in PATH_STRING.finditer(data)})
+
+
+def _whole_string(data, text):
+    """Whether `text` is a string of its own in `data`: after a NUL (or at the start) and up to a NUL."""
+    return data.startswith(text + b"\0") or b"\0" + text + b"\0" in data
 
 
 def check_paths(table, app, files):
@@ -568,11 +596,13 @@ def read_layouts(root, table, app, files):
 def stamp_hooks(root, table, app):
     """{script name: bytes} of the app's hook templates (hook_templates) with their placeholders filled in:
     @FOLDER@, @BASE_SIZE@, @SIZES@ (the sizes the package holds a layout for, as a case pattern), @BASE_AT@ (the
-    sizes of base_layout_at as a case pattern, or one that matches no size) and @WRITTEN@ (the paths of
+    sizes of base_layout_at as a case pattern, or one that matches no size), @SHOWN_AT@ (base_shown_at, the
+    same way) and @WRITTEN@ (the paths of
     saved_files, with spaces between)."""
     values = {"@FOLDER@": app["folder"], "@BASE_SIZE@": table["base_size"],
               "@SIZES@": "|".join(layout_sizes(table, app)),
               "@BASE_AT@": "|".join(app.get("base_layout_at", [])) or "none",
+              "@SHOWN_AT@": "|".join(table["base_shown_at"]) or "none",
               "@WRITTEN@": " ".join(saved_files(app))}
     out = {}
     for _, script in hook_templates(app):
@@ -826,6 +856,8 @@ def build(root, table, key, version, out, nbtpkg, seed=None, pub=None, released=
         log("layouts: %s; hooks: %s" % (", ".join(layout_sizes(table, app)), ", ".join(sorted(hooks))))
         if app.get("base_layout_at"):
             log("at %s the app shows the %s layout" % (", ".join(app["base_layout_at"]), table["base_size"]))
+        if table["base_shown_at"]:
+            log("at %s the head unit scales the %s layout" % (", ".join(table["base_shown_at"]), table["base_size"]))
     elif hook_templates(app):
         hooks = stamp_hooks(root, table, app)
         log("hooks: %s" % ", ".join(sorted(hooks)))

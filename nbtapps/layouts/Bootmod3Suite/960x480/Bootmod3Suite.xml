@@ -39,62 +39,62 @@
         <components>
           <image id="200" model="60">
             <properties>
-              <property id="20" value="252" />
-              <property id="21" value="24" />
-              <property id="9" value="312" />
-              <property id="10" value="56" />
+              <property id="20" value="240" />
+              <property id="21" value="17" />
+              <property id="9" value="297" />
+              <property id="10" value="40" />
               <property id="2" value="false" />
               <property id="3" value="true" />
             </properties>
           </image>
           <image id="201" model="61">
             <properties>
-              <property id="20" value="18" />
-              <property id="21" value="110" />
-              <property id="9" value="780" />
-              <property id="10" value="238" />
+              <property id="20" value="17" />
+              <property id="21" value="79" />
+              <property id="9" value="743" />
+              <property id="10" value="170" />
               <property id="2" value="false" />
               <property id="3" value="true" />
             </properties>
           </image>
           <button id="151" action="21" imageModel="62">
             <properties>
-              <property id="20" value="18" />
-              <property id="21" value="110" />
-              <property id="9" value="186" />
-              <property id="10" value="238" />
+              <property id="20" value="17" />
+              <property id="21" value="79" />
+              <property id="9" value="177" />
+              <property id="10" value="170" />
             </properties>
           </button>
           <button id="152" action="22" imageModel="62">
             <properties>
-              <property id="20" value="216" />
-              <property id="21" value="110" />
-              <property id="9" value="186" />
-              <property id="10" value="238" />
+              <property id="20" value="206" />
+              <property id="21" value="79" />
+              <property id="9" value="177" />
+              <property id="10" value="170" />
             </properties>
           </button>
           <button id="153" action="23" imageModel="62">
             <properties>
-              <property id="20" value="414" />
-              <property id="21" value="110" />
-              <property id="9" value="186" />
-              <property id="10" value="238" />
+              <property id="20" value="394" />
+              <property id="21" value="79" />
+              <property id="9" value="177" />
+              <property id="10" value="170" />
             </properties>
           </button>
           <button id="154" action="24" imageModel="62">
             <properties>
-              <property id="20" value="612" />
-              <property id="21" value="110" />
-              <property id="9" value="186" />
-              <property id="10" value="238" />
+              <property id="20" value="583" />
+              <property id="21" value="79" />
+              <property id="9" value="177" />
+              <property id="10" value="170" />
             </properties>
           </button>
           <label id="150" model="50">
             <properties>
-              <property id="20" value="18" />
-              <property id="21" value="372" />
-              <property id="9" value="780" />
-              <property id="10" value="55" />
+              <property id="20" value="17" />
+              <property id="21" value="266" />
+              <property id="9" value="743" />
+              <property id="10" value="39" />
             </properties>
           </label>
         </components>

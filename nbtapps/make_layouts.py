@@ -5,17 +5,20 @@
   make_layouts.py [APP ...]            generate the layouts of every app with "layouts": true, or of those named
   make_layouts.py --check [APP ...]    generate them in memory and compare them with what is committed
 
-An app is named by its key in apps.json. For each size W x H in apps.json's generated_sizes, with fx = W / base
-width and fy = H / base height (the base size is apps.json's base_size):
+An app is named by its key in apps.json. For each size in apps.json's generated_sizes, with one factor
+f = content_width(size) / content_width(base_size) along both axes (make_nbtpkg.content_width: the layout units
+of the part of the screen an app gets, 720 at 800x480, 900 at 960x480 and 1260 on every 8:3 screen):
 
-- in <Folder>.xml, the value of each <property id="20"> (x) and <property id="9"> (width) is multiplied by fx, and
-  of each <property id="21"> (y) and <property id="10"> (height) by fy. The file is changed as text: every other
-  byte stays as it is in the base file;
-- each PNG in <Folder>_ALL_Images.zip is resized to (width x fx, height x fy), in RGBA with a Lanczos filter. An
+- in <Folder>.xml, the value of each <property id="20"> (x), <property id="9"> (width), <property id="21"> (y) and
+  <property id="10"> (height) is multiplied by f. The file is changed as text: every other byte stays as it is in
+  the base file;
+- each PNG in <Folder>_ALL_Images.zip is resized to (width x f, height x f), in RGBA with a Lanczos filter. An
   image whose size does not change is copied as it is;
 - every result is rounded to the nearest whole number, halves to the even one, and a width or height is at least 1.
 
-This is what upstream's own desktop installer does. The output goes to nbtapps/layouts/<Folder>/, with a SOURCE
+This is the rule of upstream's own desktop installer since v0.7.5 (source/tools/desktop-installer/
+stage-payload.py), from Andreas Boehm's measurements in upstream's issue #113. The head unit scales a layout to an
+8:3 screen itself, so 1440x540 and 1920x720 (base_shown_at) get the base layout and none of their own. The output goes to nbtapps/layouts/<Folder>/, with a SOURCE
 file that pins the two base files by their SHA-256. README.md beside this file has the contract.
 
 The base files come from the upstream zip through make_nbtpkg.py, with all its checks. This script refuses a base
@@ -77,10 +80,10 @@ def parse_size(text):
 
 
 def factors(table, size):
-    """(fx, fy) of a size, exact."""
-    base_w, base_h = parse_size(table["base_size"])
-    width, height = parse_size(size)
-    return Fraction(width, base_w), Fraction(height, base_h)
+    """(fx, fy) of a size, exact: both the share of the base layout's units that a screen of that size gives an
+    app."""
+    f = Fraction(m.content_width(size), m.content_width(table["base_size"]))
+    return f, f
 
 
 def scaled(value, factor, minimum=0):

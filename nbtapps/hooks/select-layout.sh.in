@@ -7,9 +7,10 @@
 # or has no layout here) and copies its two files there. It runs after every install and upgrade; the HMI reads
 # the files when it next starts. nbtapps/README.md, "Layouts and hooks", has the contract.
 #
-# This package holds layouts for: @SIZES@. At a size in this app's base_layout_at in nbtapps/apps.json
-# (here: @BASE_AT@) it holds none, because the layout of that size is reported not to fit such a screen, and
-# the @BASE_SIZE@ one is shown there.
+# This package holds layouts for: @SIZES@. A screen of a size in apps.json's base_shown_at (here: @SHOWN_AT@)
+# gives an app as many layout units as a @BASE_SIZE@ one, and the head unit scales the @BASE_SIZE@ layout to it.
+# At a size in this app's base_layout_at (here: @BASE_AT@) it holds none, because the layout of that size is
+# reported not to fit such a screen, and the @BASE_SIZE@ one is shown there.
 #
 # It is written for the head unit's /bin/ksh and the tools a head unit has: builtins, sed, cp, mv, rm and sleep.
 # Exit status: 0 when a layout is in place, 1 when none could be placed (the agent then undoes the install).
@@ -140,6 +141,9 @@ if [ -n "$size" ]; then
             else
                 chosen=$size
             fi
+            ;;
+        @SHOWN_AT@)
+            seen="the screen is $size, to which the head unit scales the $base layout"
             ;;
         @BASE_AT@)
             seen="the screen is $size, and this app's layout of that size is reported not to fit it"
