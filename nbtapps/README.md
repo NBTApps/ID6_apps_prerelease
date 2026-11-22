@@ -72,8 +72,14 @@ Before it builds, `make_nbtpkg.py build` refuses the app unless:
 - the library and the workers are 32-bit little-endian ARM ELF files (a shared library, and programs);
 - the library holds `/var/opt/hmi/data/ID5/Plugins/<Folder>/<worker>` for each worker;
 - every absolute path the library or a worker holds as a whole string is one this folder knows: `/dev/null`,
-  `/var/opt/hmi/data/ID5/gateway-ip.txt` (see [Notes](#notes)), a path under `/lib/`, `/usr/lib/`, `/opt/sys/lib/`
-  or `/fs/sda0/opt/sys/lib/` (the system partition's, where HUD Gauges' worker loads the MOST library from), a path in the plugin's own folder, or a path `apps.json` names under the app's `written`; and the library holds each `written` path. A path upstream adds later stops
+  `/var/opt/hmi/data/ID5/gateway-ip.txt` (see [Notes](#notes)), a path under `/lib/`, `/usr/lib/`, `/opt/sys/lib/`,
+  `/fs/sda0/opt/sys/lib/` (the system partition's, where HUD Gauges' worker loads the MOST library from) or
+  `/opt/mm/lib/` (where BoostDeck's chime loads the sound library from, `source/native/src/workers/boost_tone.c`),
+  the files of other add-ons that the dashboards and HUD Gauges only look for (native Android Auto's
+  `/opt/aa/nbt-aad` and `NbtAad.manifest`, and CarPlay Advanced's `librghook.so`, see
+  `source/native/src/common/gauge_coexistence.h`), a path under `/work/build/` (no folder on the head unit: the
+  toolchain's libgcc, linked into some workers, keeps the paths it was built in), a path in the plugin's own
+  folder, or a path `apps.json` names under the app's `written`; and the library holds each `written` path. A path upstream adds later stops
   the build until someone has read what the plugin does with it (see [Files a plugin
   writes](#files-a-plugin-writes)). The check sees a path that is a string of its own in the file. It does not
   see one the program puts together while it runs;
@@ -266,7 +272,9 @@ A plugin may write files while it runs. The agent removes what a package placed 
 would stay on the head unit after the package is gone, and one in the plugin folder would keep the folder there
 too. An app's `written` in `apps.json` lists the files its plugin writes, by their full paths: outside the plugin
 folders, or straight in its own plugin folder, where a name the package or its hooks place, a worker's,
-`layouts`, `gateway-ip.txt` and `.select-layout.*` are refused. The app's `preRemove` hook removes them when the
+`layouts`, `gateway-ip.txt` and `.select-layout.*` are refused. `written_before` lists, in the same way, files an
+earlier version of the plugin saved and this one no longer does: an upgrade leaves them, and the library need not
+hold them (a path that a file still holds belongs under `written`). The app's `preRemove` hook removes both when the
 package is removed, with the temporary files the plugin makes beside them (`<file>.XXXXXX`, six characters): for
 an app with layouts that is `remove-layout.sh`, and for an app without layouts `remove-saved.sh`, made from
 `nbtapps/hooks/remove-saved.sh.in` with `@FOLDER@` and `@WRITTEN@` filled in, which does nothing else. An app
@@ -276,20 +284,20 @@ it does the others.
 
 BoostDeck and ShiftDeck save their colour, units and shift-light settings in
 `/var/opt/hmi/data/ID5/BoostDeck.prefs` and `/var/opt/hmi/data/ID5/ShiftDeck.prefs` (four bytes each, see
-`source/native/src/gauge_preferences.h`). BoostDeck also saves which reading each gauge position shows, for its
+`source/native/src/common/gauge_preferences.h`). BoostDeck also saves which reading each gauge position shows, for its
 gasoline and diesel layouts, in `/var/opt/hmi/data/ID5/BoostDeck.signals` (`saveAssignments` in
-`source/native/src/plugin.cpp`, through the same `savePersistentBytes`). The settings survive an upgrade and go
+`source/native/src/plugins/boost_deck.cpp`, through the same `savePersistentBytes`). The settings survive an upgrade and go
 with a removal.
 
 LaunchDeck saves the mode last chosen in `/var/opt/hmi/data/ID5/LaunchDeck.prefs` and the last three results of each mode in
 `LaunchDeck.records` (0–60 mph), `LaunchDeck.60-130`, `LaunchDeck.0-100` and `LaunchDeck.100-200` in the same
-folder (`source/native/src/launch_deck.cpp` and `launch_records.h`, through `savePersistentBytes`). They go with a
+folder (`source/native/src/plugins/launch_deck.cpp` and `common/launch_records.h`, through `savePersistentBytes`). They go with a
 removal too.
 
-HUD Gauges saves whether it is on, as `1` or `0` and a new line, in `hud-enabled` in its own plugin folder
-(`/var/opt/hmi/data/ID5/Plugins/HudTest/hud-enabled`, `saveEnabled` in `source/native/hud/hud_menu.cpp`, through
-`hud-enabled.XXXXXX` and a rename). Its `remove-saved.sh` removes it, so the folder goes with the package; an
-upgrade keeps it, and the gauges come back on at the next start if they were on.
+HUD Gauges up to 0.1.1 (upstream v0.7.4) saved whether it was on in `hud-enabled` in its own plugin folder
+(`/var/opt/hmi/data/ID5/Plugins/HudTest/hud-enabled`). Since upstream v0.7.5 it starts off in every iDrive session
+and saves nothing, so the file is under `written_before`: an upgrade leaves it, unused, and the package's
+`remove-saved.sh` removes it, so the folder still goes with the package.
 
 Neither `gateway-ip.txt` is listed: an owner writes it, the plugin only reads it, and it stays. `written` refuses
 both.
@@ -338,10 +346,10 @@ needs a new version number.
 
 - Every library reads an optional `gateway-ip.txt`, which an owner writes for a different diagnostic gateway:
   first `/var/opt/hmi/data/ID5/gateway-ip.txt`, for every app at once, then one in its own plugin folder
-  (`source/native/src/diagnostic_gateway.h`). No package holds either. The agent leaves such a file alone, and the
+  (`source/native/src/common/diagnostic_gateway.h`). No package holds either. The agent leaves such a file alone, and the
   plugin folder stays after a remove while one is there. With neither, an app connects to 169.254.21.3, and only
   when that does not answer, sends one HSFZ identification query to 169.254.255.255, UDP port 6811, and uses the
-  address that answers as the gateway if exactly one does (`discover_gateway` in `source/native/src/diag_link.c`).
+  address that answers as the gateway if exactly one does (`discover_gateway` in `source/native/src/common/diag_link.c`).
 - A head unit with an app installed by hand in the same folder refuses the package (`stock-mismatch`). The
   owner moves the hand-installed folder out of `Plugins` first.
 

@@ -122,7 +122,6 @@ REMOVE_HOOK = "#!/bin/sh\nrm -f \"$NBT_VAR_PLUGINS_DIR/@FOLDER@/@FOLDER@.xml\"\n
 WRITTEN = {
     "boostdeck": ["/var/opt/hmi/data/ID5/BoostDeck.prefs", "/var/opt/hmi/data/ID5/BoostDeck.signals"],
     "shiftdeck": ["/var/opt/hmi/data/ID5/ShiftDeck.prefs"],
-    "hud-gauges": ["/var/opt/hmi/data/ID5/Plugins/HudTest/hud-enabled"],
     "launchdeck": ["/var/opt/hmi/data/ID5/LaunchDeck.prefs", "/var/opt/hmi/data/ID5/LaunchDeck.records",
                    "/var/opt/hmi/data/ID5/LaunchDeck.60-130", "/var/opt/hmi/data/ID5/LaunchDeck.0-100",
                    "/var/opt/hmi/data/ID5/LaunchDeck.100-200"],
@@ -314,6 +313,13 @@ class TableTests(FixtureCase):
             (lambda t: t["apps"][2].update(written=["/dev/null"]), "written"),
             (lambda t: t["apps"][2].update(written=["/var/opt/hmi/data/ID5/gateway-ip.txt"]), "written"),
             (lambda t: t["apps"][2].update(written=["/var/x", "/var/x"]), "written"),
+            (lambda t: t["apps"][2].update(written_before=["relative/file"]), "written_before"),
+            (lambda t: t["apps"][2].update(written_before=["/var/x;rm"]), "written_before"),
+            (lambda t: t["apps"][2].update(written_before=[PLUGINS_ROOT + "/Delta/libDelta.so"]), "written_before"),
+            (lambda t: t["apps"][2].update(written_before=["/var/x", "/var/x"]), "written_before"),
+            (lambda t: t["apps"][2].update(written_before="/var/x"), "written_before"),
+            (lambda t: t["apps"][2].update(written=["/var/x"], written_before=["/var/x"]),
+             "a path is in both written and written_before"),
         ]
         for mutate, needle in cases:
             with self.subTest(needle=needle):
@@ -334,6 +340,8 @@ class TableTests(FixtureCase):
                 else:
                     self.assertEqual(m.layout_sizes(table, app), every)
                     self.assertEqual(app.get("written"), WRITTEN.get(key))
+                self.assertEqual(app.get("written_before"),
+                                 ["/var/opt/hmi/data/ID5/Plugins/HudTest/hud-enabled"] if key == "hud-gauges" else None)
 
 
 # ---- checks of the upstream plugin ----------------------------------------------------------------------------
@@ -447,16 +455,27 @@ class PluginTests(FixtureCase):
     def test_known_paths(self):
         for path in (b"/dev/null", b"/usr/lib/ldqnx.so.2", b"/opt/sys/lib/libx.so.4", b"/lib/libc.so.3", b"/fs/sda0/opt/sys/lib/liby.so.8",
                      PLUGINS_ROOT.encode() + b"/Delta/", PLUGINS_ROOT.encode() + b"/Delta/gateway-ip.txt",
-                     b"/var/opt/hmi/data/ID5/gateway-ip.txt"):
+                     b"/var/opt/hmi/data/ID5/gateway-ip.txt", b"/opt/aa/nbt-aad",
+                     b"/var/opt/hmi/data/ID5/Plugins/NbtAad/NbtAad.manifest",
+                     b"/var/opt/hmi/data/rw/Plugins/CarPlayMenu/librghook.so",
+                     b"/opt/mm/lib/libasound/libasound.so", b"/work/build/gcc-4.9.4/libgcc/config/arm/bpabi.S"):
             self.with_path(path)
             self.with_path(path, "Delta/delta-qnx")
         self.fx.read("delta")
+
+    def test_written_before_path(self):
+        self.fx.table["apps"][2]["written_before"] = ["/var/opt/hmi/data/ID5/Delta.old"]
+        self.fx.write()
+        self.fx.read("delta")
+        self.with_path(b"/var/opt/hmi/data/ID5/Delta.old", "Delta/delta-qnx")
+        self.refused(lambda: self.fx.read("delta"), "Delta/delta-qnx holds the path /var/opt/hmi/data/ID5/Delta.old, "
+                     "which this packaging does not know", "\"written\"")
 
     def test_written_path(self):
         self.fx.table["apps"][2]["written"] = ["/var/opt/hmi/data/ID5/Delta.prefs"]
         self.fx.write()
         self.refused(lambda: self.fx.read("delta"), "names /var/opt/hmi/data/ID5/Delta.prefs as written by the app "
-                     "delta, and Delta/libDelta.so does not hold that path")
+                     "delta, and Delta/libDelta.so does not hold that path", "\"written_before\"")
         self.with_path(b"/var/opt/hmi/data/ID5/Delta.prefs2")
         self.refused(lambda: self.fx.read("delta"), "holds the path /var/opt/hmi/data/ID5/Delta.prefs2")
         self.change("packages/two.zip", "Delta/libDelta.so", plugin("Delta", ["delta-qnx"], 303)["Delta/libDelta.so"])
@@ -546,6 +565,21 @@ class ManifestTests(FixtureCase):
         self.assertEqual(sorted(staged), sorted([
             "payload/Bravo/libBravo.so", "payload/Bravo/Bravo.manifest", "payload/Bravo/Bravo.xml",
             "payload/bin/bravo-qnx", "licenses/LICENSE"]))
+
+    def test_without_layouts_saved_before(self):
+        """An app that no longer saves a file still has the hook, so that a removal takes away what an earlier
+        version left; with `written` too, the hook removes both, `written` first."""
+        self.fx.put("%s/remove-saved.sh.in" % m.HOOKS, b"written=\"@WRITTEN@\"\n")
+        self.fx.table["apps"][1]["written_before"] = [PLUGINS_ROOT + "/Bravo/bravo-on"]
+        self.fx.write()
+        table = self.fx.table_now()
+        app = table["apps"]["bravo"]
+        self.assertEqual(m.hook_templates(app), (("preRemove", "remove-saved.sh"),))
+        self.assertEqual(m.stamp_hooks(self.fx.root, table, app),
+                         {"remove-saved.sh": ("written=\"%s/Bravo/bravo-on\"\n" % PLUGINS_ROOT).encode()})
+        self.fx.read("bravo")
+        app = dict(app, written=["/var/a/Bravo.state"])
+        self.assertEqual(m.saved_files(app), ["/var/a/Bravo.state", PLUGINS_ROOT + "/Bravo/bravo-on"])
 
     def test_without_layouts_saving(self):
         saved = self.saving_alpha()

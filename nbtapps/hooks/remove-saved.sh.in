@@ -2,9 +2,10 @@
 # preRemove hook of the @FOLDER@ package (NBTApps), made by nbtapps/make_nbtpkg.py from remove-saved.sh.in, for an
 # app without layouts that saves files.
 #
-# Removes the files the plugin itself writes while it runs (nbtapps/apps.json, "written"), and the temporary files
-# it makes beside them, <file>.XXXXXX. No package's record has them, so the agent would leave them on the head unit,
-# and one in the plugin folder would keep the folder there too. For this app: @WRITTEN@
+# Removes the files the plugin itself writes while it runs (nbtapps/apps.json, "written"), or an earlier version of
+# it wrote ("written_before"), and the temporary files it makes beside them, <file>.XXXXXX. No package's record has
+# them, so the agent would leave them on the head unit, and one in the plugin folder would keep the folder there
+# too. For this app: @WRITTEN@
 # The agent then removes the package's own files, and the plugin folder once it is empty. Nothing else is touched:
 # an owner may keep a gateway-ip.txt in the folder. The agent runs this hook when the package is removed and not
 # when it is upgraded, so what the app saved stays across an upgrade; should it ever run for an upgrade

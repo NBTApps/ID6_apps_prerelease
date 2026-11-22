@@ -58,7 +58,8 @@ DEFAULT_REPO = "NBTApps/ID6_apps_prerelease"
 RECORD = "nbtpkg-record.json"
 HOOK_TIMEOUT = 30
 HOOK_TEMPLATES = (("postInstall", "select-layout.sh"), ("preRemove", "remove-layout.sh"))
-# The hook of an app without layouts that saves files (`written`): it removes those, and nothing else.
+# The hook of an app without layouts that saves files (`written`, or `written_before`): it removes those, and
+# nothing else.
 SAVED_HOOK_TEMPLATES = (("preRemove", "remove-saved.sh"),)
 SUMS = "SHA256SUMS"
 MAX_MEMBER = 64 << 20                        # no plugin file comes near this
@@ -87,12 +88,23 @@ ABS_FILE = re.compile(r"(?:/[A-Za-z0-9._-]+)+")   # a `written` path; it goes in
 # second slash in it. Paths a program builds at run time, or keeps inside a longer string, are not seen.
 PATH_STRING = re.compile(rb"(?<![\x21-\x7e])/[\x21-\x7e]+/[\x21-\x7e]*(?=\x00)")
 # Where a plugin's files may name paths without a word here: the null device, the system's libraries, and the
-# gateway-ip.txt that an owner may write for every app at once (source/native/src/diagnostic_gateway.h). The plugins
-# only read that one, and no package places or removes it.
-KNOWN_PATHS = ("/dev/null", "/var/opt/hmi/data/ID5/gateway-ip.txt")
+# gateway-ip.txt that an owner may write for every app at once (source/native/src/common/diagnostic_gateway.h). The
+# plugins only read that one, and no package places or removes it.
+#
+# The dashboards and HUD Gauges also look for other add-ons, and only ask whether these files are there
+# (source/native/src/common/gauge_coexistence.h): native Android Auto (NBT-AAD) and CarPlay Advanced's HUD hook.
+# They yield the MOST tunnel or the HUD to them, and never write there.
+KNOWN_PATHS = ("/dev/null", "/var/opt/hmi/data/ID5/gateway-ip.txt",
+               "/opt/aa/nbt-aad",
+               "/opt/hmi/ID5/data/ro/Plugins/NbtAad/NbtAad.manifest",
+               "/var/opt/hmi/data/ID5/Plugins/NbtAad/NbtAad.manifest",
+               "/var/opt/hmi/data/rw/Plugins/CarPlayMenu/librghook.so",
+               "/var/opt/hmi/data/ID5/Plugins/CarPlayMenu/librghook.so")
 # The system's libraries are also read from /fs/sda0/opt/sys/lib/, where the system partition is mounted: HUD
-# Gauges' worker loads the MOST library from there.
-KNOWN_FOLDERS = ("/lib/", "/usr/lib/", "/opt/sys/lib/", "/fs/sda0/opt/sys/lib/")
+# Gauges' worker loads the MOST library from there. BoostDeck's chime loads the sound library from /opt/mm/lib/
+# (source/native/src/workers/boost_tone.c). /work/build/ is no folder on the head unit: the toolchain's libgcc,
+# linked into some workers, keeps the paths it was built in.
+KNOWN_FOLDERS = ("/lib/", "/usr/lib/", "/opt/sys/lib/", "/fs/sda0/opt/sys/lib/", "/opt/mm/lib/", "/work/build/")
 
 EM_ARM, ET_EXEC, ET_DYN = 40, 2, 3
 
@@ -139,7 +151,7 @@ def load_table(root=ROOT):
     apps = {}
     folders, connectors = set(), set()
     required = {"key", "name", "folder", "zip", "workers", "connector", "images", "layouts"}
-    optional = {"conflicts", "licenses", "base_layout_at", "written"}
+    optional = {"conflicts", "licenses", "base_layout_at", "written", "written_before"}
     for app in table["apps"]:
         if not isinstance(app, dict):
             bad("an app is not an object")
@@ -188,16 +200,20 @@ def load_table(root=ROOT):
             bad("%s: base_layout_at is not a list of distinct sizes from generated_sizes" % where)
         if base_at and not app["layouts"]:
             bad("%s: base_layout_at is for an app with layouts" % where)
-        written = app.get("written", [])
         own = "%s/%s" % (root_dir, app["folder"])
         placed = _placed_names(app)
-        if (not isinstance(written, list) or len(set(map(str, written))) != len(written)
-                or not all(isinstance(p, str) and len(p) <= 200 and ABS_FILE.fullmatch(p)
-                           and not re.search(r"/\.\.?(?:/|$)", p) and not _is_known(p)
-                           and (not _is_under(p, root_dir) or _own_saved_file(p, own, placed)) for p in written)):
-            bad("%s: written is not a list of distinct absolute file paths, each outside %s and the system's "
-                "folders, or straight in %s and not a file the package or its hooks place there"
-                % (where, root_dir, own))
+        for field in ("written", "written_before"):
+            written = app.get(field, [])
+            if (not isinstance(written, list) or len(set(map(str, written))) != len(written)
+                    or not all(isinstance(p, str) and len(p) <= 200 and ABS_FILE.fullmatch(p)
+                               and not re.search(r"/\.\.?(?:/|$)", p) and not _is_known(p)
+                               and (not _is_under(p, root_dir) or _own_saved_file(p, own, placed))
+                               for p in written)):
+                bad("%s: %s is not a list of distinct absolute file paths, each outside %s and the system's "
+                    "folders, or straight in %s and not a file the package or its hooks place there"
+                    % (where, field, root_dir, own))
+        if set(app.get("written", [])) & set(app.get("written_before", [])):
+            bad("%s: a path is in both written and written_before" % where)
         apps[key] = dict(app, id=pkg_id)
 
     for key, app in apps.items():
@@ -241,12 +257,18 @@ def _own_saved_file(path, own, placed):
             and not name.startswith(".select-layout"))
 
 
+def saved_files(app):
+    """The files the preRemove hook removes: what the plugin saves (`written`), then what an earlier version of it
+    saved and this one no longer does (`written_before`), which an upgrade left on the head unit."""
+    return list(app.get("written", [])) + list(app.get("written_before", []))
+
+
 def hook_templates(app):
     """(kind, script) of each hook an app's package has: the layout hooks for an app with layouts, the hook that
     removes what it saved for another app that saves files, and none for the rest."""
     if app["layouts"]:
         return HOOK_TEMPLATES
-    if app.get("written"):
+    if saved_files(app):
         return SAVED_HOOK_TEMPLATES
     return ()
 
@@ -449,7 +471,8 @@ def path_strings(data):
 
 def check_paths(table, app, files):
     """Every absolute path in the library and the workers is one this packaging knows: the system's, one in the
-    plugin's own folder, or one apps.json names under `written`, and each of those is in the library. A removal
+    plugin's own folder, or one apps.json names under `written`, and each of those is in the library. A path under
+    `written_before` that a file still holds is refused as unknown, as it belongs under `written`. A removal
     takes away the package's files and what the preRemove hook removes, so a path the plugin writes to that is
     named nowhere would stay on the head unit."""
     folder = app["folder"]
@@ -466,8 +489,9 @@ def check_paths(table, app, files):
                           % (folder, name, path, app["key"], TABLE))
     for path in written:
         if path.encode("ascii") + b"\0" not in files[lib]:
-            raise Refused("%s names %s as written by the app %s, and %s/%s does not hold that path"
-                          % (TABLE, path, app["key"], folder, lib))
+            raise Refused("%s names %s as written by the app %s, and %s/%s does not hold that path. If this "
+                          "version no longer saves it, move it to \"written_before\", so that a removal still "
+                          "takes away what an earlier version left" % (TABLE, path, app["key"], folder, lib))
 
 
 # ---- layouts and hooks ----------------------------------------------------------------------------------------
@@ -545,11 +569,11 @@ def stamp_hooks(root, table, app):
     """{script name: bytes} of the app's hook templates (hook_templates) with their placeholders filled in:
     @FOLDER@, @BASE_SIZE@, @SIZES@ (the sizes the package holds a layout for, as a case pattern), @BASE_AT@ (the
     sizes of base_layout_at as a case pattern, or one that matches no size) and @WRITTEN@ (the paths of
-    `written`, with spaces between)."""
+    saved_files, with spaces between)."""
     values = {"@FOLDER@": app["folder"], "@BASE_SIZE@": table["base_size"],
               "@SIZES@": "|".join(layout_sizes(table, app)),
               "@BASE_AT@": "|".join(app.get("base_layout_at", [])) or "none",
-              "@WRITTEN@": " ".join(app.get("written", []))}
+              "@WRITTEN@": " ".join(saved_files(app))}
     out = {}
     for _, script in hook_templates(app):
         path = "%s/%s.in" % (HOOKS, script)
@@ -805,8 +829,8 @@ def build(root, table, key, version, out, nbtpkg, seed=None, pub=None, released=
     elif hook_templates(app):
         hooks = stamp_hooks(root, table, app)
         log("hooks: %s" % ", ".join(sorted(hooks)))
-    if app.get("written"):
-        log("preRemove %sremoves: %s" % ("also " if app["layouts"] else "", ", ".join(app["written"])))
+    if saved_files(app):
+        log("preRemove %sremoves: %s" % ("also " if app["layouts"] else "", ", ".join(saved_files(app))))
     staged, manifest = stage(root, table, app, version, files, layouts, hooks)
 
     with tempfile.TemporaryDirectory(prefix="nbtpkg-stage-") as work:
@@ -863,6 +887,8 @@ def cmd_list(args, table, root):
             notes.append("the %s layout at %s" % (table["base_size"], ", ".join(app["base_layout_at"])))
         if app.get("written"):
             notes.append("writes " + ", ".join(app["written"]))
+        if app.get("written_before"):
+            notes.append("removes what earlier versions wrote: " + ", ".join(app["written_before"]))
         if app.get("licenses"):
             notes.append("also " + ", ".join(app["licenses"]))
         print("%-20s %-38s %-19s %-14s %-24s %-9d %s" % (key, app["id"], app["name"], app["folder"], app["zip"],

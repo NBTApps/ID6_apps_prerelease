@@ -184,10 +184,15 @@ def commands(text):
 WRITTEN = {
     "boostdeck": ["/var/opt/hmi/data/ID5/BoostDeck.prefs", "/var/opt/hmi/data/ID5/BoostDeck.signals"],
     "shiftdeck": ["/var/opt/hmi/data/ID5/ShiftDeck.prefs"],
-    "hud-gauges": ["/var/opt/hmi/data/ID5/Plugins/HudTest/hud-enabled"],
     "launchdeck": ["/var/opt/hmi/data/ID5/LaunchDeck.prefs", "/var/opt/hmi/data/ID5/LaunchDeck.records",
                    "/var/opt/hmi/data/ID5/LaunchDeck.60-130", "/var/opt/hmi/data/ID5/LaunchDeck.0-100",
                    "/var/opt/hmi/data/ID5/LaunchDeck.100-200"],
+}
+
+# What an earlier version of an app saved and this one no longer does, which the preRemove hook removes too:
+# HUD Gauges up to 0.1.1 (upstream v0.7.4) saved whether it was on.
+WRITTEN_BEFORE = {
+    "hud-gauges": ["/var/opt/hmi/data/ID5/Plugins/HudTest/hud-enabled"],
 }
 
 
@@ -246,20 +251,22 @@ class StaticTests(unittest.TestCase):
                     self.assertIsNone(re.search(pattern, code), "%s uses %s" % (name, what))
 
     def test_only_hud_gauges_saves_without_layouts(self):
-        self.assertEqual([app["key"] for app in TABLE["apps"].values() if not app["layouts"] and app.get("written")],
-                         ["hud-gauges"])
+        self.assertEqual([app["key"] for app in TABLE["apps"].values()
+                          if not app["layouts"] and m.saved_files(app)], ["hud-gauges"])
         for app in TABLE["apps"].values():
             with self.subTest(app=app["key"]):
+                self.assertEqual(app.get("written_before"), WRITTEN_BEFORE.get(app["key"]))
                 self.assertEqual(sorted(stamped(app)), ["remove-layout.sh", "select-layout.sh"] if app["layouts"]
-                                 else ["remove-saved.sh"] if app.get("written") else [])
+                                 else ["remove-saved.sh"] if m.saved_files(app) else [])
 
     def test_remove_saved_stamps(self):
         hooks = stamped(SAVING_APP)
         text = hooks["remove-saved.sh"]
         self.assertEqual(m.PLACEHOLDER.findall(text), [])
         self.assertIn("folder=HudTest\n", text)
-        self.assertIn('written="%s"\n' % " ".join(WRITTEN["hud-gauges"]), text)
-        self.assertEqual(SAVING_APP["written"], WRITTEN["hud-gauges"])
+        self.assertIn('written="%s"\n' % " ".join(WRITTEN_BEFORE["hud-gauges"]), text)
+        self.assertNotIn("written", SAVING_APP)
+        self.assertEqual(SAVING_APP["written_before"], WRITTEN_BEFORE["hud-gauges"])
         work = tempfile.mkdtemp(prefix="hooks-syntax-")
         self.addCleanup(shutil.rmtree, work, True)
         path = os.path.join(work, "remove-saved.sh")
@@ -812,7 +819,8 @@ class RemoveTests(HookCase):
 
 
 class RemoveSavedTests(HookCase):
-    """remove-saved.sh, stamped for HUD Gauges with its saved file in a plugin folder of the test's own."""
+    """remove-saved.sh, stamped for HUD Gauges with the file an earlier version saved in a plugin folder of the
+    test's own."""
 
     def setUp(self):
         super().setUp()
@@ -821,7 +829,7 @@ class RemoveSavedTests(HookCase):
         for name in ("libHudTest.so", "HudTest.manifest", "HudTest.xml", "hud-shape-qnx"):
             write(os.path.join(self.hud, name), name)
         write(os.path.join(self.hud, "gateway-ip.txt"), "169.254.21.3\n")
-        self.use(dict(SAVING_APP, written=[self.saved]))
+        self.use(dict(SAVING_APP, written_before=[self.saved]))
 
     def remove(self, action="remove", **kwargs):
         result = self.run_hook("remove-saved.sh", action, **kwargs)

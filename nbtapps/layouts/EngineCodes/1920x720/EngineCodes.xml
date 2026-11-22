@@ -56,7 +56,7 @@
             <properties>
               <property id="20" value="93" />
               <property id="21" value="124" />
-              <property id="9" value="382" />
+              <property id="9" value="486" />
               <property id="10" value="82" />
             </properties>
           </label>
@@ -64,7 +64,7 @@
             <properties>
               <property id="20" value="93" />
               <property id="21" value="225" />
-              <property id="9" value="382" />
+              <property id="9" value="486" />
               <property id="10" value="82" />
             </properties>
           </label>
@@ -72,7 +72,7 @@
             <properties>
               <property id="20" value="93" />
               <property id="21" value="326" />
-              <property id="9" value="382" />
+              <property id="9" value="486" />
               <property id="10" value="82" />
             </properties>
           </label>
@@ -80,7 +80,7 @@
             <properties>
               <property id="20" value="93" />
               <property id="21" value="426" />
-              <property id="9" value="382" />
+              <property id="9" value="486" />
               <property id="10" value="82" />
             </properties>
           </label>
@@ -94,33 +94,33 @@
           </button>
           <label id="330" model="91">
             <properties>
-              <property id="20" value="489" />
+              <property id="20" value="592" />
               <property id="21" value="124" />
-              <property id="9" value="1202" />
+              <property id="9" value="1098" />
               <property id="10" value="87" />
             </properties>
           </label>
           <label id="331" model="92">
             <properties>
-              <property id="20" value="489" />
+              <property id="20" value="592" />
               <property id="21" value="225" />
-              <property id="9" value="1202" />
+              <property id="9" value="1098" />
               <property id="10" value="87" />
             </properties>
           </label>
           <label id="332" model="93">
             <properties>
-              <property id="20" value="489" />
+              <property id="20" value="592" />
               <property id="21" value="326" />
-              <property id="9" value="1202" />
+              <property id="9" value="1098" />
               <property id="10" value="87" />
             </properties>
           </label>
           <label id="333" model="94">
             <properties>
-              <property id="20" value="489" />
+              <property id="20" value="592" />
               <property id="21" value="426" />
-              <property id="9" value="1202" />
+              <property id="9" value="1098" />
               <property id="10" value="87" />
             </properties>
           </label>
