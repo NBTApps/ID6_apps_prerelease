@@ -121,11 +121,13 @@ REMOVE_HOOK = "#!/bin/sh\nrm -f \"$NBT_VAR_PLUGINS_DIR/@FOLDER@/@FOLDER@.xml\"\n
 
 # What the real table says each app writes outside its folder (see nbtapps/README.md).
 WRITTEN = {
-    "boostdeck": ["/var/opt/hmi/data/ID5/BoostDeck.prefs", "/var/opt/hmi/data/ID5/BoostDeck.signals"],
-    "shiftdeck": ["/var/opt/hmi/data/ID5/ShiftDeck.prefs"],
+    "boostdeck": ["/var/opt/hmi/data/ID5/BoostDeck.prefs", "/var/opt/hmi/data/ID5/BoostDeck.signals",
+                  "/var/opt/hmi/data/ID5/ID6DctTemperature.prefs"],
+    "shiftdeck": ["/var/opt/hmi/data/ID5/ShiftDeck.v2.prefs", "/var/opt/hmi/data/ID5/ShiftDeck.prefs"],
     "launchdeck": ["/var/opt/hmi/data/ID5/LaunchDeck.prefs", "/var/opt/hmi/data/ID5/LaunchDeck.records",
                    "/var/opt/hmi/data/ID5/LaunchDeck.60-130", "/var/opt/hmi/data/ID5/LaunchDeck.0-100",
                    "/var/opt/hmi/data/ID5/LaunchDeck.100-200"],
+    "warmdeck": ["/var/opt/hmi/data/ID5/WarmDeck.units", "/var/opt/hmi/data/ID5/ID6DctTemperature.prefs"],
 }
 
 
@@ -263,16 +265,10 @@ def make_keys(folder):
 class TableTests(FixtureCase):
     def test_real_table_loads(self):
         table = m.load_table(REPO_ROOT)
-        self.assertEqual(len(table["apps"]), 13)
+        self.assertEqual(len(table["apps"]), 12)
+        self.assertNotIn("hud-gauges", table["apps"])
         self.assertEqual(table["apps"]["mg-flasher"]["conflicts"], ["mhd-suite", "bootmod3-suite"])
         self.assertEqual(table["apps"]["mhd-suite"]["id"], "com.github.nbtapps.mhd-suite")
-
-    def test_hud_gauges_licences_are_the_zips(self):
-        """The NBT-AAD licence and notice that HUD Gauges carries are the ones in upstream's hud-gauges.zip."""
-        with zipfile.ZipFile(os.path.join(REPO_ROOT, "packages", "hud-gauges.zip")) as z:
-            for ours, theirs in (("NBT-AAD-LICENSE.md", "LICENSE.md"), ("NBT-AAD-NOTICE.txt", "NOTICE.txt")):
-                with open(os.path.join(REPO_ROOT, "nbtapps", "licenses", ours), "rb") as f:
-                    self.assertEqual(f.read(), z.read(theirs), ours)
 
     def test_refusals(self):
         cases = [
@@ -346,8 +342,7 @@ class TableTests(FixtureCase):
                 self.assertNotIn("base_layout_at", app)
                 self.assertEqual(m.layout_sizes(table, app), every)
                 self.assertEqual(app.get("written"), WRITTEN.get(key))
-                self.assertEqual(app.get("written_before"),
-                                 ["/var/opt/hmi/data/ID5/Plugins/HudTest/hud-enabled"] if key == "hud-gauges" else None)
+                self.assertIsNone(app.get("written_before"))
 
 
 # ---- checks of the upstream plugin ----------------------------------------------------------------------------
@@ -544,6 +539,151 @@ class PluginTests(FixtureCase):
         damaged[at] ^= 0xFF
         self.change("packages/one.zip", "Alpha/Alpha_ALL_Images.zip", bytes(damaged))
         self.refused(lambda: self.fx.read("alpha"), "is damaged")
+
+
+# ---- a zip upstream publishes as a release asset --------------------------------------------------------------
+
+DOWNLOAD = "nbtapps/upstream/up.zip"
+DOWNLOAD_URL = "https://github.com/someone/upstream/releases/download/v1.0.0/up.zip"
+
+
+class _Response(io.BytesIO):
+    """What urlopen gives, as far as fetch reads it."""
+
+
+class DownloadTests(FixtureCase):
+    """Delta read from a zip that apps.json pins under downloads, with its plugin folders under payload/."""
+
+    def setUp(self):
+        super().setUp()
+        members = {"payload/" + p: d for p, d in self.fx.zips["packages/two.zip"].items() if p.startswith("Delta/")}
+        members["payload/README.md"] = b"readme\n"
+        out = io.BytesIO()
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+            for path, data in members.items():
+                z.writestr(path, data)
+        self.data = out.getvalue()
+        self.fx.table["downloads"] = {DOWNLOAD: {"url": DOWNLOAD_URL, "sha256": hashlib.sha256(self.data).hexdigest(),
+                                                 "folder": "payload"}}
+        self.fx.table["apps"][2]["zip"] = DOWNLOAD
+        self.fx.write()
+
+    def opener(self, data=None):
+        calls = []
+
+        def open_url(url):
+            calls.append(url)
+            return _Response(self.data if data is None else data)
+        return open_url, calls
+
+    def test_table(self):
+        self.assertIsNone(self.fx.app("alpha")["download"])
+        self.assertEqual(self.fx.app("delta")["download"]["folder"], "payload")
+        cases = [
+            (lambda t: t["downloads"].update({"packages/x.zip": t["downloads"][DOWNLOAD]}), "nbtapps/upstream/"),
+            (lambda t: t["downloads"][DOWNLOAD].update(url="http://github.com/a/b/releases/download/v1/up.zip"),
+             "is not {url"),
+            (lambda t: t["downloads"][DOWNLOAD].update(url="https://example.com/up.zip"), "is not {url"),
+            (lambda t: t["downloads"][DOWNLOAD].update(sha256="0" * 63), "is not {url"),
+            (lambda t: t["downloads"][DOWNLOAD].update(sha256="A" * 64), "is not {url"),
+            (lambda t: t["downloads"][DOWNLOAD].update(folder="../payload"), "is not {url"),
+            (lambda t: t["downloads"][DOWNLOAD].pop("folder"), "is not {url"),
+            (lambda t: t.update(downloads=[]), "downloads is not an object"),
+            (lambda t: t["apps"][0].update(zip="nbtapps/upstream/other.zip"), "a path in downloads"),
+        ]
+        for mutate, needle in cases:
+            with self.subTest(needle=needle):
+                table = copy.deepcopy(self.fx.table)
+                mutate(table)
+                self.fx.put(m.TABLE, json.dumps(table, indent=2).encode())
+                self.refused(self.fx.table_now, needle)
+
+    def test_not_fetched_yet(self):
+        self.refused(lambda: self.fx.read("delta"), DOWNLOAD + " is not there", "make_nbtpkg.py fetch", DOWNLOAD_URL)
+
+    def test_read_from_the_pinned_zip(self):
+        self.fx.put(DOWNLOAD, self.data)
+        files, note = m.read_plugin(self.fx.root, self.fx.app("delta"))
+        self.assertEqual(files, {p[len("Delta/"):]: d for p, d in self.fx.zips["packages/two.zip"].items()
+                                 if p.startswith("Delta/")})
+        self.assertIn("the zip's SHA-256 is the one apps.json pins", note)
+        self.fx.read("delta")
+
+    def test_another_zip_at_the_path(self):
+        self.fx.put(DOWNLOAD, self.data + b"\0")
+        self.refused(lambda: self.fx.read("delta"), "not %s as apps.json pins" % hashlib.sha256(self.data).hexdigest())
+
+    def test_folder_checked_as_in_packages(self):
+        with zipfile.ZipFile(io.BytesIO(self.data)) as z:
+            members = {i.filename: z.read(i) for i in z.infolist()}
+        members["payload/Delta/extra.bin"] = b"x"
+        out = io.BytesIO()
+        with zipfile.ZipFile(out, "w") as z:
+            for path, data in members.items():
+                z.writestr(path, data)
+        self.data = out.getvalue()
+        self.fx.table["downloads"][DOWNLOAD]["sha256"] = hashlib.sha256(self.data).hexdigest()
+        self.fx.write()
+        self.fx.put(DOWNLOAD, self.data)
+        self.refused(lambda: self.fx.read("delta"), "the folder payload/Delta/ holds extra.bin")
+
+    def test_fetch(self):
+        open_url, calls = self.opener()
+        lines = []
+        m.fetch(self.fx.root, self.fx.table_now(), opener=open_url, log=lines.append)
+        self.assertEqual(calls, [DOWNLOAD_URL])
+        with open(self.fx.path(*DOWNLOAD.split("/")), "rb") as f:
+            self.assertEqual(f.read(), self.data)
+        self.assertFalse(os.path.exists(self.fx.path(*DOWNLOAD.split("/")) + ".part"))
+        self.fx.read("delta")
+        # Once it is there, it is checked and not downloaded again.
+        m.fetch(self.fx.root, self.fx.table_now(), opener=open_url, log=lines.append)
+        self.assertEqual(calls, [DOWNLOAD_URL])
+        self.assertIn("there, SHA-256", lines[-1])
+
+    def test_fetch_checks_a_file_there(self):
+        self.fx.put(DOWNLOAD, b"something else")
+        open_url, calls = self.opener()
+        self.refused(lambda: m.fetch(self.fx.root, self.fx.table_now(), opener=open_url, log=QUIET),
+                     "remove it and run")
+        self.assertEqual(calls, [])
+
+    def test_fetch_another_file_writes_nothing(self):
+        open_url, _ = self.opener(b"not the zip")
+        self.refused(lambda: m.fetch(self.fx.root, self.fx.table_now(), opener=open_url, log=QUIET),
+                     "nothing was written")
+        self.assertFalse(os.path.exists(self.fx.path("nbtapps", "upstream")))
+
+    def test_fetch_too_large(self):
+        open_url, _ = self.opener(b"x" * 100)
+        with mock_attr(m, "MAX_DOWNLOAD", 10):
+            self.refused(lambda: m.fetch(self.fx.root, self.fx.table_now(), opener=open_url, log=QUIET),
+                         "is larger than 10 bytes")
+        self.assertFalse(os.path.exists(self.fx.path("nbtapps", "upstream")))
+
+    def test_fetch_fails_to_download(self):
+        def open_url(url):
+            raise OSError("no network")
+        self.refused(lambda: m.fetch(self.fx.root, self.fx.table_now(), opener=open_url, log=QUIET),
+                     "cannot be downloaded: no network")
+
+    def test_fetch_with_no_downloads(self):
+        del self.fx.table["downloads"]
+        self.fx.table["apps"][2]["zip"] = "packages/two.zip"
+        self.fx.write()
+        open_url, calls = self.opener()
+        m.fetch(self.fx.root, self.fx.table_now(), opener=open_url, log=QUIET)
+        self.assertEqual(calls, [])
+
+
+@contextlib.contextmanager
+def mock_attr(obj, name, value):
+    old = getattr(obj, name)
+    setattr(obj, name, value)
+    try:
+        yield
+    finally:
+        setattr(obj, name, old)
 
 
 # ---- the manifest and the staged folder -----------------------------------------------------------------------
@@ -1025,7 +1165,7 @@ class RealZipTests(unittest.TestCase):
                 self.assertEqual((info["id"], info["version"]), (app["id"], "1.0.0"))
                 hooks = [script for _, script in m.hook_templates(app)]
                 self.assertEqual(info["flags"], (["runs-scripts"] if hooks else []) + ["needs-reboot"])
-                self.assertEqual(hooks, ["remove-saved.sh"] if key == "hud-gauges" else [])
+                self.assertEqual(hooks, [])
                 placed = m.make_manifest(table, app, "1.0.0")["install"]["files"]
                 self.assertEqual(result["manifest"]["install"]["files"], placed)
                 names = {c["path"] for c in result["manifest"]["contents"]}

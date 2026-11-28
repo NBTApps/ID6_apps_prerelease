@@ -33,6 +33,16 @@
       <raDataModel id="51" modelType="Richtext" />
       <raDataModel id="52" modelType="Richtext" />
       <raDataModel id="53" modelType="Richtext" />
+      <imageIdModel id="59400" imageId="59400" />
+      <imageIdModel id="59516" imageId="59516" />
+      <imageIdModel id="59517" imageId="59517" />
+      <imageIdModel id="59518" imageId="59518" />
+      <imageIdModel id="59532" imageId="59532" />
+      <imageIdModel id="59533" imageId="59533" />
+      <imageIdModel id="59548" imageId="59548" />
+      <imageIdModel id="59549" imageId="59549" />
+      <imageIdModel id="59550" imageId="59550" />
+      <imageIdModel id="59551" imageId="59551" />
     </models>
     <hmiStates>
       <hmiState id="100" text="Bootmod3 Suite">
@@ -106,26 +116,140 @@
       </hmiState>
       <hmiState id="102" parentId="100" text="Exhaust flap">
         <components>
-          <button id="215" action="25" text="OEM control" />
-          <button id="216" action="26" text="Request open" />
-          <button id="217" action="27" text="Request closed" />
-          <label id="321" model="51" />
+          <image id="59411" model="59400">
+            <properties>
+              <property id="20" value="587" />
+              <property id="21" value="7" />
+              <property id="9" value="254" />
+              <property id="10" value="46" />
+              <property id="2" value="false" />
+              <property id="3" value="true" />
+            </properties>
+          </image>
+          <button id="215" action="25" text="OEM control" imageModel="59516">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="59" />
+              <property id="9" value="391" />
+              <property id="10" value="31" />
+            </properties>
+          </button>
+          <button id="216" action="26" text="Request open" imageModel="59517">
+            <properties>
+              <property id="20" value="431" />
+              <property id="21" value="59" />
+              <property id="9" value="391" />
+              <property id="10" value="31" />
+            </properties>
+          </button>
+          <button id="217" action="27" text="Request closed" imageModel="59518">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="94" />
+              <property id="9" value="391" />
+              <property id="10" value="31" />
+            </properties>
+          </button>
+          <label id="321" model="51">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="277" />
+              <property id="9" value="821" />
+              <property id="10" value="23" />
+            </properties>
+          </label>
         </components>
       </hmiState>
       <hmiState id="103" parentId="100" text="Active Sound">
         <components>
-          <button id="218" action="28" text="Off" />
-          <button id="219" action="29" text="On" />
-          <label id="322" model="52" />
+          <image id="59412" model="59400">
+            <properties>
+              <property id="20" value="587" />
+              <property id="21" value="7" />
+              <property id="9" value="254" />
+              <property id="10" value="46" />
+              <property id="2" value="false" />
+              <property id="3" value="true" />
+            </properties>
+          </image>
+          <button id="218" action="28" text="Off" imageModel="59532">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="59" />
+              <property id="9" value="391" />
+              <property id="10" value="31" />
+            </properties>
+          </button>
+          <button id="219" action="29" text="On" imageModel="59533">
+            <properties>
+              <property id="20" value="431" />
+              <property id="21" value="59" />
+              <property id="9" value="391" />
+              <property id="10" value="31" />
+            </properties>
+          </button>
+          <label id="322" model="52">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="277" />
+              <property id="9" value="821" />
+              <property id="10" value="23" />
+            </properties>
+          </label>
         </components>
       </hmiState>
       <hmiState id="104" parentId="100" text="Burbles">
         <components>
-          <button id="400" action="30" text="Off" />
-          <button id="401" action="31" text="Aggression 4" />
-          <button id="402" action="32" text="Aggression 8" />
-          <button id="403" action="33" text="Aggression 12" />
-          <label id="404" model="53" />
+          <image id="59413" model="59400">
+            <properties>
+              <property id="20" value="587" />
+              <property id="21" value="7" />
+              <property id="9" value="254" />
+              <property id="10" value="46" />
+              <property id="2" value="false" />
+              <property id="3" value="true" />
+            </properties>
+          </image>
+          <button id="400" action="30" text="Off" imageModel="59548">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="59" />
+              <property id="9" value="391" />
+              <property id="10" value="31" />
+            </properties>
+          </button>
+          <button id="401" action="31" text="Aggression 4" imageModel="59549">
+            <properties>
+              <property id="20" value="431" />
+              <property id="21" value="59" />
+              <property id="9" value="391" />
+              <property id="10" value="31" />
+            </properties>
+          </button>
+          <button id="402" action="32" text="Aggression 8" imageModel="59550">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="94" />
+              <property id="9" value="391" />
+              <property id="10" value="31" />
+            </properties>
+          </button>
+          <button id="403" action="33" text="Aggression 12" imageModel="59551">
+            <properties>
+              <property id="20" value="431" />
+              <property id="21" value="94" />
+              <property id="9" value="391" />
+              <property id="10" value="31" />
+            </properties>
+          </button>
+          <label id="404" model="53">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="277" />
+              <property id="9" value="821" />
+              <property id="10" value="23" />
+            </properties>
+          </label>
         </components>
       </hmiState>
     </hmiStates>

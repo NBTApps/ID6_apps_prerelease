@@ -1,12 +1,17 @@
 <!-- SPDX-License-Identifier: MIT -->
 # NBTApps packaging
 
-This folder belongs to the NBTApps fork of `inotbarnacle/ID6_apps_prerelease`. Upstream's maintainer agreed to
+This folder belongs to the NBTApps fork of `inotbarnacle/ID6_apps_prerelease`, which upstream renamed
+`inotbarnacle/iDriveDeck` in v0.7.18. Upstream's maintainer agreed to
 the apps being packaged for [NBTApps](https://github.com/tom-pryor/nbtapps), an app store for BMW NBT Evo head
 units. It turns upstream's prebuilt plugins into signed `.nbtpkg` packages, one per app, which the NBTApps agent
 installs on a head unit.
 
-Nothing is compiled here. Each package holds upstream's files from `packages/*.zip` as they are.
+Nothing is compiled here. Each package holds upstream's prebuilt files as they are. Up to v0.7.6 upstream
+committed them in `packages/*.zip`. Since v0.7.18 it publishes them only as a release asset, the installer's
+payload zip (`iDriveDeck-v<version>-payloads.zip`), whose `payload/<Folder>/` is each plugin folder. `apps.json`
+pins that zip's address and SHA-256 under `downloads`, and `make_nbtpkg.py fetch` downloads it to
+`nbtapps/upstream/`, which git ignores. The apps are built from upstream's v0.7.19.
 
 The fork's own files are this folder and `.github/workflows/nbtpkg.yml`. Everything else is upstream's and is
 never changed here.
@@ -17,27 +22,32 @@ never changed here.
 
 | Key | Name | Plugin folder | From | Connector id | Layouts |
 |---|---|---|---|---|---|
-| `boostdeck` | BoostDeck | `BoostDeck` | `packages/dashboard.zip` | 100 | per screen size |
-| `shiftdeck` | ShiftDeck | `ShiftDeck` | `packages/dashboard.zip` | 104 | per screen size |
-| `engine-fault-codes` | Engine Fault Codes | `EngineCodes` | `packages/dashboard.zip` | 102 | per screen size |
-| `mhd-suite` | MHD+ Suite | `MhdMaps` | `packages/dashboard.zip` | 103 | per screen size |
-| `bootmod3-suite` | Bootmod3 Suite | `Bootmod3Suite` | `packages/bootmod3.zip` | 111 | per screen size |
-| `xdrive-control` | xDrive Control | `XDriveControl` | `packages/xdrive.zip` | 112 | none (no images) |
-| `road-jet` | Road Jet | `RoadJet` | `packages/road-jet.zip` | 217 | 1280×480 only |
-| `beamer` | BEAMer | `BEAMer` | `packages/beamer.zip` | 218 | 1280×480 only |
-| `launchdeck` | LaunchDeck | `LaunchDeck` | `packages/launchdeck.zip` | 120 | per screen size |
-| `hud-gauges` | HUD Gauges | `HudTest` | `packages/hud-gauges.zip` | 107 | none (no images) |
-| `warmdeck` | WarmDeck | `WarmDeck` | `packages/warmdeck.zip` | 115 | per screen size |
-| `hybriddeck` | HybridDeck | `HybridDeck` | `packages/hybriddeck.zip` | 117 | per screen size |
-| `mg-flasher` | MG Flasher | `MgFlasher` | `packages/mgflasher.zip` | 116 | per screen size |
+| `boostdeck` | BoostDeck | `BoostDeck` | payloads | 100 | per screen size |
+| `shiftdeck` | ShiftDeck | `ShiftDeck` | payloads | 104 | per screen size |
+| `engine-fault-codes` | Engine Fault Codes | `EngineCodes` | payloads | 102 | per screen size |
+| `mhd-suite` | MHD+ Suite | `MhdMaps` | payloads | 103 | per screen size |
+| `bootmod3-suite` | Bootmod3 Suite | `Bootmod3Suite` | payloads | 111 | per screen size |
+| `xdrive-control` | xDrive Control | `XDriveControl` | payloads | 112 | per screen size |
+| `road-jet` | Road Jet | `RoadJet` | payloads | 217 | 1280×480 only |
+| `beamer` | BEAMer | `BEAMer` | payloads | 218 | 1280×480 only |
+| `launchdeck` | LaunchDeck | `LaunchDeck` | payloads | 120 | per screen size |
+| `warmdeck` | WarmDeck | `WarmDeck` | payloads | 115 | per screen size |
+| `hybriddeck` | HybridDeck | `HybridDeck` | payloads | 117 | per screen size |
+| `mg-flasher` | MG Flasher | `MgFlasher` | payloads | 116 | per screen size |
+
+"payloads" is `nbtapps/upstream/iDriveDeck-v0.7.19-payloads.zip`, the asset of upstream's release
+`installer-v0.7.19`. xDrive Control has had images, and so layouts, since v0.7.18. Upstream's full-screen apps
+(`ID6Full*`, from v0.7.18) and its EntryNav2 apps, in the same zip, are not packaged here.
+
+HUD Gauges (`hud-gauges`, `HudTest`, connector 107) was retired upstream in v0.7.18, and `packages/hud-gauges.zip`
+with it. Its released packages, up to 0.1.2, stay in the catalogue; no new version is built, and it is no longer in
+`apps.json`. It carried NBT-AAD's licence and notice: its worker was built with NBT-AAD's HUD terminal and MOST
+client, under the PolyForm Noncommercial License 1.0.0.
 
 MHD+ Suite, Bootmod3 Suite and MG Flasher conflict: a car's tune is from one of them, and upstream's installer
 offers one tuning menu. MHD+ Suite and Bootmod3 Suite name each other; MG Flasher names both, which the agent
 honours whichever package declares it, so the two released packages are unchanged. Bootmod3 Suite and xDrive Control also
-carry `source/third-party/idrive7-apps-LICENSE`. HUD Gauges carries NBT-AAD's licence and notice
-(`nbtapps/licenses/`, the `LICENSE.md` and `NOTICE.txt` of `packages/hud-gauges.zip`, which a test keeps equal):
-its worker `hud-shape-qnx` is built with NBT-AAD's HUD terminal and MOST client, under the PolyForm Noncommercial
-License 1.0.0. Its plugin and the rest are under upstream's MIT licence.
+carry `source/third-party/idrive7-apps-LICENSE`. The rest are under upstream's MIT licence.
 LaunchDeck's worker is called `shift-deck-qnx` and is the same file as ShiftDeck's, a copy in its own folder.
 
 Every package installs one plugin folder into `${var_plugins}/<Folder>/`. On a car that is
@@ -69,8 +79,9 @@ manifest does not install, as they do for hook scripts.
 
 Before it builds, `make_nbtpkg.py build` refuses the app unless:
 
-- the zip's `SHA256SUMS`, where it has one, lists every file of the plugin folder with the right hash, and lists
-  no file of that folder that is not there (`road-jet.zip` and `beamer.zip` have none, and the build says so);
+- a zip under `downloads` is there and has the SHA-256 that `apps.json` pins (`fetch` downloads it). A zip in
+  `packages/` has its `SHA256SUMS`, where it has one, list every file of the plugin folder with the right hash,
+  and no file of that folder that is not there;
 - the plugin folder holds exactly `lib<Folder>.so`, the workers, `<Folder>.manifest`, `<Folder>.xml` and, for an
   app with images, `<Folder>_ALL_Images.zip`. A file upstream adds later stops the build until this folder is
   updated for it;
@@ -105,6 +116,7 @@ You need python3, a checkout of NBTApps that has `${var_plugins}` (its `headunit
 
 ```sh
 export NBTAPPS_HEADUNIT=/path/to/nbtapps/headunit
+python3 nbtapps/make_nbtpkg.py fetch            # upstream's payload zip, checked against its pinned SHA-256
 python3 nbtapps/make_nbtpkg.py list
 python3 nbtapps/make_nbtpkg.py build --app road-jet --version 1.0.0 --out nbtapps/out     # not signed
 python3 -m unittest discover -s nbtapps/tests
@@ -121,16 +133,17 @@ build refuses a tree with changes under `packages/`, `source/` or `nbtapps/` tha
 `--allow-dirty` it signs such a tree and writes no record. The record names the release
 `<key>-v<version>` of `--repo` (default `NBTApps/ID6_apps_prerelease`).
 
-The tests need nothing but python3. The ones that build or sign need `NBTAPPS_HEADUNIT`, and are skipped
+The tests need nothing but python3, and the real apps' tests need the zip `fetch` downloads. The ones that
+build or sign need `NBTAPPS_HEADUNIT`, and are skipped
 without it. They fail if it names a folder that is not an NBTApps `headunit/`. With `NBTCAT_TOOLS` set to the
 catalogue repo's `tools/` folder, the end-to-end test also checks each real archive with `nbtcat.py`. The tests
 make their own throwaway keys.
 
 ## Layouts and hooks
 
-Nine apps (`"layouts": true`) need a layout file per screen resolution. Upstream ships the 1280×480 one only.
+Ten apps (`"layouts": true`) need a layout file per screen resolution. Upstream ships the 1280×480 one only.
 The rest come from two parts of this folder: `make_layouts.py` generates the layouts, and the hook scripts pick
-one on the head unit. `build` refuses one of these six apps when a file of either part is missing, and lists
+one on the head unit. `build` refuses one of these apps when a file of either part is missing, and lists
 what is missing. Road Jet and BEAMer ship their 1280×480 layout only, with no hook. This is the contract both
 parts keep to.
 
@@ -146,14 +159,14 @@ parts keep to.
   ```
 
 - `nbtapps/layouts/<Folder>/SOURCE` names the base files the layouts were made from, in `sha256sum` format,
-  with their paths in the upstream zip:
+  with their paths in the upstream zip (in the payload zip, under its `payload/` folder):
 
   ```
   <sha256>  <Folder>/<Folder>.xml
   <sha256>  <Folder>/<Folder>_ALL_Images.zip
   ```
 
-  After `unzip packages/<zip>.zip` in an empty folder, `sha256sum -c` checks it there.
+  After unzipping the payload zip in an empty folder, `sha256sum -c` checks it in its `payload/` folder.
 - `build` refuses an app whose `SOURCE` does not match the zip: upstream changed the base layout and the others
   are stale. It also refuses a missing size, a folder or file there that is not listed above, a generated
   `<Folder>.xml` that is not XML or has an `entryButtonFocusID`, and an image zip that does not read back.
@@ -297,8 +310,10 @@ one for an upgrade (`NBT_ACTION=upgrade`), they leave the files. `tests/test_hoo
 it does the others.
 
 BoostDeck and ShiftDeck save their colour, units and shift-light settings in
-`/var/opt/hmi/data/ID5/BoostDeck.prefs` and `/var/opt/hmi/data/ID5/ShiftDeck.prefs` (four bytes each, see
-`source/native/src/common/gauge_preferences.h`). BoostDeck also saves which reading each gauge position shows, for its
+`/var/opt/hmi/data/ID5/BoostDeck.prefs` and, since upstream v0.7.18, `/var/opt/hmi/data/ID5/ShiftDeck.v2.prefs`
+(four bytes each, see `source/native/src/common/gauge_preferences.h`). ShiftDeck still reads the
+`ShiftDeck.prefs` of earlier versions once, to carry its settings over (`kLegacyPreferences` in
+`source/native/src/plugins/shift_deck.cpp`), so that path is in its library and both are under `written`. BoostDeck also saves which reading each gauge position shows, for its
 gasoline and diesel layouts, in `/var/opt/hmi/data/ID5/BoostDeck.signals` (`saveAssignments` in
 `source/native/src/plugins/boost_deck.cpp`, through the same `savePersistentBytes`). The settings survive an upgrade and go
 with a removal.
@@ -308,10 +323,15 @@ LaunchDeck saves the mode last chosen in `/var/opt/hmi/data/ID5/LaunchDeck.prefs
 folder (`source/native/src/plugins/launch_deck.cpp` and `common/launch_records.h`, through `savePersistentBytes`). They go with a
 removal too.
 
-HUD Gauges up to 0.1.1 (upstream v0.7.4) saved whether it was on in `hud-enabled` in its own plugin folder
-(`/var/opt/hmi/data/ID5/Plugins/HudTest/hud-enabled`). Since upstream v0.7.5 it starts off in every iDrive session
-and saves nothing, so the file is under `written_before`: an upgrade leaves it, unused, and the package's
-`remove-saved.sh` removes it, so the folder still goes with the package.
+WarmDeck saves its temperature units in `/var/opt/hmi/data/ID5/WarmDeck.units` (`saveWarmFahrenheit` in
+`source/native/src/common/warm_units.h`). BoostDeck and WarmDeck share the one-byte
+`/var/opt/hmi/data/ID5/ID6DctTemperature.prefs`, the "DCT temperature (experimental)" choice of upstream v0.7.19
+(`source/native/src/common/dct_settings.h`). It is under `written` for both, so removing either turns the choice
+off, which is its default, for the other one as well: the other way, it would stay on the head unit after both are
+gone.
+
+No app in `apps.json` has a `remove-saved.sh` now. The last was HUD Gauges, whose `hud-enabled` was under
+`written_before`; `tests/test_hooks.py` still runs the template as it was stamped for it.
 
 Neither `gateway-ip.txt` is listed: an owner writes it, the plugin only reads it, and it stays. `written` refuses
 both.
@@ -324,11 +344,12 @@ with the app, the version and an optional note. It:
 1. stops at once if `NBTAPPS_COMMIT`, the pinned NBTApps commit, is empty or not a full commit. It is the
    commit nbtapps-packages pins in its own workflows;
 2. checks out this repo and NBTApps' `headunit/tools` and `headunit/spec` at that commit;
-3. runs the tests, then `build --require-key` with the key from the `nbtpkg` environment's secret
+3. downloads the zips under `apps.json`'s `downloads` with `make_nbtpkg.py fetch`, which checks each one's SHA-256;
+4. runs the tests, then `build --require-key` with the key from the `nbtpkg` environment's secret
    `NBTPKG_AUTHOR_KEY`;
-4. if the release `<app>-v<version>` exists, compares its archive with the one just built: the same bytes end the
+5. if the release `<app>-v<version>` exists, compares its archive with the one just built: the same bytes end the
    run well, other bytes fail it. A published version never changes;
-5. otherwise creates the release as a draft pre-release at the commit it built, with the archive and
+6. otherwise creates the release as a draft pre-release at the commit it built, with the archive and
    `nbtpkg-record.json`, and publishes it.
 
 One release holds one package. The nbtapps-packages bot reads this repo's releases and proposes each new version
@@ -337,17 +358,21 @@ stable, take the pre-release mark off its GitHub release and open a pull request
 `"channel": "prerelease"` out of its record. A package's first version is added to nbtapps-packages by hand,
 with its listing and `author.pub`; the bot only follows packages that are there.
 
-The bot reads the 30 newest releases. With ten packages in one repo, a package whose newest release has fallen
+The bot reads the 30 newest releases. With twelve packages in one repo, a package whose newest release has fallen
 out of those is not followed until it has a new one.
 
 ## Taking in upstream's changes
 
-Merge `upstream/main` into this branch. Nothing outside `nbtapps/` and `.github/workflows/nbtpkg.yml` is the
-fork's own, so a merge should not conflict.
+Merge the tag of upstream's release, `installer-v<version>`, into this branch, so that the source here is the
+source of the files packaged. Nothing outside `nbtapps/` and `.github/workflows/nbtpkg.yml` is the fork's own, so a
+merge should not conflict. Then point `downloads` in `apps.json` at that release's payload zip: its address, the
+SHA-256 that the release's `iDriveDeck-v<version>-SHA256SUMS.txt` gives, and each app's `zip`. Remove the old zip
+from `nbtapps/upstream/`.
 
 ```sh
-git fetch upstream
-git merge upstream/main
+git fetch upstream --tags
+git merge installer-v0.7.19
+python3 nbtapps/make_nbtpkg.py fetch
 python3 -m unittest discover -s nbtapps/tests
 ```
 

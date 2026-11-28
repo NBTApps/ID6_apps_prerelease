@@ -39,7 +39,11 @@ BASE = TABLE["base_size"]
 SIZES = m.all_sizes(TABLE)
 LAYOUT_APPS = [app for app in TABLE["apps"].values() if app["layouts"]]
 SCALED = "the screen is %s, to which the head unit scales the " + TABLE["base_size"] + " layout"
-SAVING_APP = TABLE["apps"]["hud-gauges"]   # an app without layouts that saves a file in its own folder
+# An app without layouts that saves a file in its own folder. No app in apps.json is one since HUD Gauges was
+# retired upstream (v0.7.18), so remove-saved.sh is tested as it was stamped for HUD Gauges 0.1.2.
+SAVING_APP = {"key": "hud-gauges", "id": "com.github.nbtapps.hud-gauges", "name": "HUD Gauges", "folder": "HudTest",
+              "workers": ["hud-shape-qnx"], "connector": 107, "images": False, "layouts": False,
+              "written_before": ["/var/opt/hmi/data/ID5/Plugins/HudTest/hud-enabled"]}
 
 # What the scripts may call. The tools are the ones a probe found on a head unit that the brief allows; the rest
 # are builtins of the head unit's ksh (pdksh) that sh has too.
@@ -183,11 +187,13 @@ def commands(text):
 
 # What the real table says each app writes outside its folder (see nbtapps/README.md).
 WRITTEN = {
-    "boostdeck": ["/var/opt/hmi/data/ID5/BoostDeck.prefs", "/var/opt/hmi/data/ID5/BoostDeck.signals"],
-    "shiftdeck": ["/var/opt/hmi/data/ID5/ShiftDeck.prefs"],
+    "boostdeck": ["/var/opt/hmi/data/ID5/BoostDeck.prefs", "/var/opt/hmi/data/ID5/BoostDeck.signals",
+                  "/var/opt/hmi/data/ID5/ID6DctTemperature.prefs"],
+    "shiftdeck": ["/var/opt/hmi/data/ID5/ShiftDeck.v2.prefs", "/var/opt/hmi/data/ID5/ShiftDeck.prefs"],
     "launchdeck": ["/var/opt/hmi/data/ID5/LaunchDeck.prefs", "/var/opt/hmi/data/ID5/LaunchDeck.records",
                    "/var/opt/hmi/data/ID5/LaunchDeck.60-130", "/var/opt/hmi/data/ID5/LaunchDeck.0-100",
                    "/var/opt/hmi/data/ID5/LaunchDeck.100-200"],
+    "warmdeck": ["/var/opt/hmi/data/ID5/WarmDeck.units", "/var/opt/hmi/data/ID5/ID6DctTemperature.prefs"],
 }
 
 # What an earlier version of an app saved and this one no longer does, which the preRemove hook removes too:
@@ -200,8 +206,8 @@ WRITTEN_BEFORE = {
 class StaticTests(unittest.TestCase):
     def test_every_layout_app_stamps(self):
         self.assertEqual([app["key"] for app in LAYOUT_APPS],
-                         ["boostdeck", "shiftdeck", "engine-fault-codes", "mhd-suite", "bootmod3-suite", "launchdeck",
-                          "warmdeck", "hybriddeck", "mg-flasher"])
+                         ["boostdeck", "shiftdeck", "engine-fault-codes", "mhd-suite", "bootmod3-suite",
+                          "xdrive-control", "launchdeck", "warmdeck", "hybriddeck", "mg-flasher"])
         for app in LAYOUT_APPS:
             with self.subTest(app=app["key"]):
                 hooks = stamped(app)
@@ -250,12 +256,12 @@ class StaticTests(unittest.TestCase):
                 with self.subTest(script=name, construct=what):
                     self.assertIsNone(re.search(pattern, code), "%s uses %s" % (name, what))
 
-    def test_only_hud_gauges_saves_without_layouts(self):
+    def test_no_app_saves_without_layouts(self):
         self.assertEqual([app["key"] for app in TABLE["apps"].values()
-                          if not app["layouts"] and m.saved_files(app)], ["hud-gauges"])
+                          if not app["layouts"] and m.saved_files(app)], [])
         for app in TABLE["apps"].values():
             with self.subTest(app=app["key"]):
-                self.assertEqual(app.get("written_before"), WRITTEN_BEFORE.get(app["key"]))
+                self.assertIsNone(app.get("written_before"))
                 self.assertEqual(sorted(stamped(app)), ["remove-layout.sh", "select-layout.sh"] if app["layouts"]
                                  else ["remove-saved.sh"] if m.saved_files(app) else [])
 

@@ -1,0 +1,151 @@
+<?xml version='1.0' encoding='utf-8'?>
+<pluginApps>
+  <pluginApp applicationType="VehicleInformation" applicationWeight="216" text="xDrive Control (experimental)">
+    <entryButton id="1" action="10">
+      <properties>
+        <property id="23" value="2" />
+      </properties>
+    </entryButton>
+    <actions>
+      <hmiAction id="10" target="100" />
+      <hmiAction id="11" target="101" />
+      <hmiAction id="12" target="102" />
+      <raAction id="21" />
+      <raAction id="22" />
+      <raAction id="23" />
+    </actions>
+    <models>
+      <raDataModel id="50" modelType="Richtext" />
+      <imageIdModel id="59400" imageId="59400" />
+      <imageIdModel id="59500" imageId="59500" />
+      <imageIdModel id="59501" imageId="59501" />
+      <imageIdModel id="59502" imageId="59502" />
+      <imageIdModel id="59516" imageId="59516" />
+      <imageIdModel id="59532" imageId="59532" />
+    </models>
+    <hmiStates>
+      <hmiState id="100" text="xDrive Control (experimental)">
+        <components>
+          <image id="59410" model="59400">
+            <properties>
+              <property id="20" value="587" />
+              <property id="21" value="7" />
+              <property id="9" value="254" />
+              <property id="10" value="46" />
+              <property id="2" value="false" />
+              <property id="3" value="true" />
+            </properties>
+          </image>
+          <button id="200" text="Read transfer case mode" action="21" imageModel="59500">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="59" />
+              <property id="9" value="391" />
+              <property id="10" value="31" />
+            </properties>
+          </button>
+          <button id="201" text="Request rear-wheel drive" action="11" imageModel="59501">
+            <properties>
+              <property id="20" value="431" />
+              <property id="21" value="59" />
+              <property id="9" value="391" />
+              <property id="10" value="31" />
+            </properties>
+          </button>
+          <button id="202" text="Restore all-wheel drive" action="12" imageModel="59502">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="94" />
+              <property id="9" value="391" />
+              <property id="10" value="31" />
+            </properties>
+          </button>
+          <label id="203" model="50">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="277" />
+              <property id="9" value="821" />
+              <property id="10" value="23" />
+            </properties>
+          </label>
+        </components>
+      </hmiState>
+      <hmiState id="101" parentId="100" text="Confirm rear-wheel drive">
+        <components>
+          <image id="59411" model="59400">
+            <properties>
+              <property id="20" value="587" />
+              <property id="21" value="7" />
+              <property id="9" value="254" />
+              <property id="10" value="46" />
+              <property id="2" value="false" />
+              <property id="3" value="true" />
+            </properties>
+          </image>
+          <label id="204" text="In Park, parking brake set. Engine off, or running on F-series DSC_25.">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="55" />
+              <property id="9" value="821" />
+              <property id="10" value="24" />
+            </properties>
+          </label>
+          <button id="205" action="22" text="Confirm rear-wheel drive" imageModel="59516">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="84" />
+              <property id="9" value="391" />
+              <property id="10" value="31" />
+            </properties>
+          </button>
+          <label id="206" model="50">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="277" />
+              <property id="9" value="821" />
+              <property id="10" value="23" />
+            </properties>
+          </label>
+        </components>
+      </hmiState>
+      <hmiState id="102" parentId="100" text="Confirm all-wheel drive">
+        <components>
+          <image id="59412" model="59400">
+            <properties>
+              <property id="20" value="587" />
+              <property id="21" value="7" />
+              <property id="9" value="254" />
+              <property id="10" value="46" />
+              <property id="2" value="false" />
+              <property id="3" value="true" />
+            </properties>
+          </image>
+          <label id="207" text="In Park, parking brake set. Engine off, or running on F-series DSC_25.">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="55" />
+              <property id="9" value="821" />
+              <property id="10" value="24" />
+            </properties>
+          </label>
+          <button id="208" action="23" text="Confirm all-wheel drive" imageModel="59532">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="84" />
+              <property id="9" value="391" />
+              <property id="10" value="31" />
+            </properties>
+          </button>
+          <label id="209" model="50">
+            <properties>
+              <property id="20" value="20" />
+              <property id="21" value="277" />
+              <property id="9" value="821" />
+              <property id="10" value="23" />
+            </properties>
+          </label>
+        </components>
+      </hmiState>
+    </hmiStates>
+  </pluginApp>
+</pluginApps>

@@ -115,8 +115,8 @@ class CommittedLayoutTests(unittest.TestCase):
 
     def test_the_layout_apps(self):
         self.assertEqual([app["folder"] for app in self.apps],
-                         ["BoostDeck", "ShiftDeck", "EngineCodes", "MhdMaps", "Bootmod3Suite", "LaunchDeck",
-                          "WarmDeck", "HybridDeck", "MgFlasher"])
+                         ["BoostDeck", "ShiftDeck", "EngineCodes", "MhdMaps", "Bootmod3Suite", "XDriveControl",
+                          "LaunchDeck", "WarmDeck", "HybridDeck", "MgFlasher"])
         self.assertEqual(self.table["generated_sizes"], ["800x480", "960x480"])
         self.assertEqual(self.table["base_shown_at"], ["1440x540", "1920x720"])
 
@@ -247,7 +247,7 @@ class RuleTests(unittest.TestCase):
 
     def test_road_jet_and_beamer_get_no_layouts(self):
         table = m.load_table(REPO_ROOT)
-        for key in ("road-jet", "beamer", "xdrive-control", "hud-gauges"):
+        for key in ("road-jet", "beamer"):
             with self.subTest(key=key):
                 with self.assertRaises(m.Refused) as caught:
                     L.layout_apps(table, [key])

@@ -3,12 +3,15 @@
 """Repackages upstream's prebuilt iDrive 6 plugins as NBTApps packages (.nbtpkg), one package per app.
 
   make_nbtpkg.py list
+  make_nbtpkg.py fetch
   make_nbtpkg.py build --app KEY --version X.Y.Z [--out DIR] [--key FILE] [--require-key] [--pub FILE]
                        [--released YYYY-MM-DD] [--note TEXT]... [--repo OWNER/REPO] [--allow-dirty]
                        [--nbtapps DIR]
 
-Nothing is compiled. `build` reads one plugin folder out of its zip in packages/, checks it, stages a package
-source folder and has NBTApps' tools/nbtpkg.py build the archive. --nbtapps (or the environment variable
+Nothing is compiled. `build` reads one plugin folder out of its zip, checks it, stages a package source folder
+and has NBTApps' tools/nbtpkg.py build the archive. The zip is one in packages/, or one that upstream publishes as
+a release asset only: apps.json's `downloads` pins its address and SHA-256, and `fetch` downloads it to
+nbtapps/upstream/. --nbtapps (or the environment variable
 NBTAPPS_HEADUNIT) is the headunit/ folder of an NBTApps checkout. nbtpkg.py is loaded from there and not copied
 here, as it is under another licence.
 
@@ -81,6 +84,13 @@ FOLDER = re.compile(r"[A-Za-z0-9_]{1,64}")
 WORKER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,59}-qnx")
 SIZE = re.compile(r"[1-9][0-9]{2,4}x[1-9][0-9]{2,4}")
 ZIP_PATH = re.compile(r"packages/[A-Za-z0-9._-]+\.zip")
+# A zip that upstream publishes as a release asset only, and `fetch` downloads here. apps.json's `downloads` pins
+# its address and SHA-256. The folder is ignored by git.
+DOWNLOAD_PATH = re.compile(r"nbtapps/upstream/[A-Za-z0-9._-]+\.zip")
+DOWNLOAD_URL = re.compile(r"https://github\.com/[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}/releases/download/"
+                          r"[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,200}")
+SHA256_HEX = re.compile(r"[0-9a-f]{64}")
+MAX_DOWNLOAD = 256 << 20
 REL_PATH = re.compile(r"(?!.*(?:^|/)\.\.?(?:/|$))[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*")
 PLACEHOLDER = re.compile(r"@[A-Z][A-Z0-9_]*@")
 ABS_FILE = re.compile(r"(?:/[A-Za-z0-9._-]+)+")   # a `written` path; it goes into a shell script as it is
@@ -133,8 +143,20 @@ def load_table(root=ROOT):
     if not isinstance(table, dict):
         bad("is not a JSON object")
     known = {"namespace", "requires_agent", "plugins_root", "base_size", "generated_sizes", "base_shown_at", "apps"}
-    if set(table) != known:
-        bad("has the keys %s, not %s" % (sorted(table), sorted(known)))
+    if not known <= set(table) or not set(table) <= known | {"downloads"}:
+        bad("has the keys %s, not %s (and optionally downloads)" % (sorted(table), sorted(known)))
+    downloads = table.get("downloads", {})
+    if not isinstance(downloads, dict):
+        bad("downloads is not an object")
+    for path, pin in downloads.items():
+        if not DOWNLOAD_PATH.fullmatch(path):
+            bad("downloads: %r is not nbtapps/upstream/<name>.zip" % path[:80])
+        if (not isinstance(pin, dict) or set(pin) != {"url", "sha256", "folder"}
+                or not isinstance(pin["url"], str) or not DOWNLOAD_URL.fullmatch(pin["url"])
+                or not isinstance(pin["sha256"], str) or not SHA256_HEX.fullmatch(pin["sha256"])
+                or not isinstance(pin["folder"], str) or not REL_PATH.fullmatch(pin["folder"])):
+            bad("downloads: %s is not {url (a GitHub release asset), sha256 (64 lowercase hex), folder (where "
+                "the plugin folders are in the zip)}" % path)
     if not isinstance(table["namespace"], str) or not PACKAGE_ID.fullmatch(table["namespace"]):
         bad("namespace is not a package id prefix")
     if not isinstance(table["requires_agent"], str) or not table["requires_agent"]:
@@ -180,8 +202,8 @@ def load_table(root=ROOT):
         if not isinstance(app["folder"], str) or not FOLDER.fullmatch(app["folder"]) or app["folder"] in folders:
             bad("%s: the folder is not a name of A-Z, a-z, 0-9 and _, or is there twice" % where)
         folders.add(app["folder"])
-        if not isinstance(app["zip"], str) or not ZIP_PATH.fullmatch(app["zip"]):
-            bad("%s: zip is not packages/<name>.zip" % where)
+        if not isinstance(app["zip"], str) or not (ZIP_PATH.fullmatch(app["zip"]) or app["zip"] in downloads):
+            bad("%s: zip is not packages/<name>.zip or a path in downloads" % where)
         workers = app["workers"]
         if (not isinstance(workers, list) or not workers or len(set(workers)) != len(workers)
                 or not all(isinstance(w, str) and WORKER.fullmatch(w) for w in workers)):
@@ -223,14 +245,14 @@ def load_table(root=ROOT):
                     % (where, field, root_dir, own))
         if set(app.get("written", [])) & set(app.get("written_before", [])):
             bad("%s: a path is in both written and written_before" % where)
-        apps[key] = dict(app, id=pkg_id)
+        apps[key] = dict(app, id=pkg_id, download=downloads.get(app["zip"]))
 
     for key, app in apps.items():
         conflicts = app.get("conflicts", [])
         if (not isinstance(conflicts, list) or len(set(conflicts)) != len(conflicts)
                 or not all(isinstance(c, str) and c in apps and c != key for c in conflicts)):
             bad("app %r: conflicts is not a list of other apps' keys" % key)
-    return dict(table, apps=apps)
+    return dict(table, apps=apps, downloads=downloads)
 
 
 def _no_duplicates(items):
@@ -316,12 +338,31 @@ def image_zip(folder):
 
 # ---- reading and checking the upstream plugin -----------------------------------------------------------------
 
+def check_download(root, path, pin):
+    """The SHA-256 of a downloaded zip is the one apps.json pins."""
+    full = os.path.join(root, path)
+    if not os.path.isfile(full) or os.path.islink(full):
+        raise Refused("%s is not there: `make_nbtpkg.py fetch` downloads it from %s" % (path, pin["url"]))
+    digest = hashlib.sha256()
+    with open(full, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            digest.update(chunk)
+    if digest.hexdigest() != pin["sha256"]:
+        raise Refused("%s has the SHA-256 %s, not %s as apps.json pins: remove it and run `make_nbtpkg.py fetch`"
+                      % (path, digest.hexdigest(), pin["sha256"]))
+
+
 def read_plugin(root, app):
-    """{name: bytes} of the app's plugin folder in its upstream zip, with the zip's SHA256SUMS checked.
-    Returns (files, note), where note says how the files were pinned."""
+    """{name: bytes} of the app's plugin folder in its upstream zip, with the zip's SHA256SUMS checked, or, for a
+    zip in apps.json's downloads, the zip's own SHA-256. Returns (files, note), where note says how the files were
+    pinned."""
     path = os.path.join(root, app["zip"])
     folder = app["folder"]
-    prefix = folder + "/"
+    pin = app.get("download")
+    if pin:
+        check_download(root, app["zip"], pin)
+    # In a downloaded zip the plugin folders are under the pin's folder. Errors name the folder as in the zip.
+    prefix = ("%s/%s/" % (pin["folder"], folder)) if pin else folder + "/"
     try:
         archive = zipfile.ZipFile(path)
     except (OSError, zipfile.BadZipFile) as e:
@@ -354,7 +395,9 @@ def read_plugin(root, app):
                       "update nbtapps/apps.json and this script to match, after checking what the change is"
                       % (app["zip"], prefix, "; ".join(parts), ", ".join(sorted(expected))))
 
-    if sums is None:
+    if pin:
+        note = "%s: the zip's SHA-256 is the one apps.json pins (%s)" % (app["zip"], pin["url"])
+    elif sums is None:
         note = "%s has no %s: the files are pinned by this commit only" % (app["zip"], SUMS)
     else:
         check_sums(app["zip"], sums, prefix, found)
@@ -929,6 +972,42 @@ def cmd_list(args, table, root):
           "HMI restart." % (table["plugins_root"], table["requires_agent"]))
 
 
+def fetch(root, table, opener=None, log=print):
+    """Downloads each zip in apps.json's downloads that is not there yet, and checks every one's SHA-256. A file
+    is written whole, through a .part file beside it, and only once its SHA-256 is the pinned one."""
+    if opener is None:
+        import urllib.request
+        opener = lambda url: urllib.request.urlopen(url, timeout=120)   # noqa: E731
+    for path, pin in table["downloads"].items():
+        full = os.path.join(root, path)
+        if os.path.isfile(full):
+            check_download(root, path, pin)
+            log("%s: there, SHA-256 %s" % (path, pin["sha256"]))
+            continue
+        log("%s: downloading %s" % (path, pin["url"]))
+        digest, chunks, size = hashlib.sha256(), [], 0
+        try:
+            with opener(pin["url"]) as response:
+                for chunk in iter(lambda: response.read(1 << 20), b""):
+                    size += len(chunk)
+                    if size > MAX_DOWNLOAD:
+                        raise Refused("%s is larger than %d bytes" % (pin["url"], MAX_DOWNLOAD))
+                    digest.update(chunk)
+                    chunks.append(chunk)
+        except OSError as e:
+            raise Refused("%s cannot be downloaded: %s" % (pin["url"], e))
+        if digest.hexdigest() != pin["sha256"]:
+            raise Refused("%s has the SHA-256 %s, not %s as apps.json pins; nothing was written"
+                          % (pin["url"], digest.hexdigest(), pin["sha256"]))
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        _write(full, b"".join(chunks))
+        log("%s: %d bytes, SHA-256 %s" % (path, size, pin["sha256"]))
+
+
+def cmd_fetch(args, table, root):
+    fetch(root, table)
+
+
 def cmd_build(args, table, root):
     # The cheap argument checks come before anything that reads a key or a zip.
     if args.app not in table["apps"]:
@@ -956,6 +1035,8 @@ def main(argv=None, root=ROOT):
     parser = argparse.ArgumentParser(prog="make_nbtpkg.py", description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("list", help="print the app table").set_defaults(run=cmd_list)
+    sub.add_parser("fetch", help="download the zips apps.json pins under downloads, and check them"
+                   ).set_defaults(run=cmd_fetch)
     p = sub.add_parser("build", help="build one app's package")
     p.add_argument("--app", required=True, help="the app's key, as `list` prints it")
     p.add_argument("--version", required=True, help="X.Y.Z, with an optional pre-release part")
