@@ -1,5 +1,24 @@
 # Change notes
 
+## v0.7.19
+
+- Recovers from empty managed plugin folders left behind after a reset.
+- Adds an 800 × 480 EntryNav2 layout for 6.5-inch displays.
+- Adds the captured GS7D36SG transmission temperature source to BoostDeck and WarmDeck.
+- Fixes LaunchDeck record reads after I/O errors and BoostDeck telemetry parsing across numeric locales.
+- Accepts explicitly addressed, on-link EntryNav2 and NBT Evo SSH peers at the edge of the ENET subnet. Updates the Trio Collector to accept explicitly addressed private on-link subnets.
+- Publishes the standard, full-screen and EntryNav2 source together.
+
+## v0.7.18
+
+- Renames the project to **iDriveDeck**.
+- Adds 12 native EntryNav2 menus to the desktop installer under **EntryNav2 (early beta)**.
+- Adds independent full-screen NBT Evo ID6 apps under **My Vehicle**, with layouts for five panel sizes from 800 × 480 to 1920 × 720.
+- Gives MHD+ Suite, Bootmod3 Suite, and MG Flasher a shared full-screen design with their own logos and controls.
+- Displays ShiftDeck RPM in 10 RPM steps and adds shift-light targets from 6,000 to 8,000 RPM.
+- Backs up and replaces previously installed managed menus. Retires HUD Gauges from the installer.
+- Adds **ID6 App Updates** to the full-screen bundle for future signed USB updates.
+
 ## v0.7.6
 
 - Adds MG Flasher live controls and HybridDeck for plug-in hybrid telemetry, including battery health where reported.
