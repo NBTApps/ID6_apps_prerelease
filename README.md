@@ -2,7 +2,7 @@
 
 Vehicle gauges, tuning controls, diagnostics, and more under **My Vehicle** on BMW NBT Evo ID6 and EntryNav2.
 
-[Download v0.7.18 for macOS or Windows](https://github.com/inotbarnacle/iDriveDeck/releases/tag/installer-v0.7.18) · [Installation guide](Installer.md) · [Change notes](CHANGELOG.md)
+[Download v0.7.19 for macOS or Windows](https://github.com/inotbarnacle/iDriveDeck/releases/tag/installer-v0.7.19) · [Installation guide](Installer.md) · [Change notes](CHANGELOG.md)
 
 ## NBT Evo ID6
 
@@ -16,7 +16,7 @@ Full-screen mode detects 800 × 480, 960 × 480, 1280 × 480, 1440 × 540 or 192
 
 ## EntryNav2 (early beta)
 
-The same macOS and Windows installer now includes 12 native EntryNav2 menus. Choose **EntryNav2 (early beta)** and enter the head unit IP and its existing SSH password over wired ENET. The installer selects matching builds for W2408C1R, Q2051B1R and C1643D1R, with a beta fallback for unrecognized framework pairs. EntryNav2 uses the native iDrive view under **My Vehicle** on 1280 × 480 displays.
+The same macOS and Windows installer now includes 12 native EntryNav2 menus. Choose **EntryNav2 (early beta)** and enter the head unit IP and its existing SSH password over wired ENET. The installer selects matching builds for W2408C1R, Q2051B1R and C1643D1R, with a beta fallback for unrecognized framework pairs. EntryNav2 uses the native iDrive view under **My Vehicle** on 1280 × 480 or 6.5-inch 800 × 480 displays. Select the panel size in the installer.
 
 The available apps include BoostDeck, ShiftDeck, WarmDeck, LaunchDeck, HybridDeck, Engine Fault Codes, Road Jet, BEAMer, MHD+ Suite, Bootmod3 Suite, MG Flasher, and experimental xDrive Control. Vehicle data and tuning functions depend on the corresponding ECU and tune.
 
@@ -25,6 +25,8 @@ The available apps include BoostDeck, ShiftDeck, WarmDeck, LaunchDeck, HybridDec
 The new installer backs up and removes the previous iDriveDeck or ID6Apps menus that it manages, then installs your selected set. Select every app you want to keep. Record the backup location and restart iDrive after installation. HUD Gauges is retired from the installer.
 
 Full-screen ID6 adds **My Vehicle → ID6 App Updates**. That menu will be used for future signed USB app updates. Use the desktop installer for this release.
+
+[Build and release source](source/docs/RELEASE-BUILD.md) covers the standard NBT Evo apps, full-screen apps, and EntryNav2 ports.
 
 ## Features
 

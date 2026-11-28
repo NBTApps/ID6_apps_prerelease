@@ -95,6 +95,11 @@ static int unsupported_marker_read(unsigned nrc) {
     return nrc==0x11 || nrc==0x12 || nrc==0x13 || nrc==0x31 || nrc==0x7e || nrc==0x7f;
 }
 
+static void copy_marker_address(volatile unsigned char *field, const unsigned char *address) {
+    /* These packet fields may be unaligned on QNX ARM. Keep the stores byte-wide. */
+    for (unsigned i=0; i<4; ++i) field[i]=address[i];
+}
+
 static int bm3_profile(control_link link) {
     static const unsigned char addresses[][4]={
         {0x80,0x7f,0xfe,0x50},{0x09,0x77,0xfe,0x4c},
@@ -108,8 +113,8 @@ static int bm3_profile(control_link link) {
         unsigned char define[]={0x2c,2,0xf3,1,0x24,0,0,0,0,0,BM3_MARKER_SIZE};
         unsigned char direct[]={0x23,0x14,0,0,0,0,BM3_MARKER_SIZE};
         unsigned negative, offset=3;
-        memcpy(define+5,addresses[i],4);
-        memcpy(direct+2,addresses[i],4);
+        copy_marker_address(define+5,addresses[i]);
+        copy_marker_address(direct+2,addresses[i]);
         // Defining F301 again appends data unless the previous range is cleared.
         int n=exchange(link,0x12,clear,sizeof clear,cleared,sizeof cleared,reply,sizeof reply,1600,&negative);
         if (n>=4) n=exchange(link,0x12,define,sizeof define,defined,sizeof defined,reply,sizeof reply,1600,&negative);
